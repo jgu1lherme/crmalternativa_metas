@@ -14,15 +14,42 @@ def carregar_planilha_metas(caminho_arquivo, aba=0):
     return df
 
 
-def processar_vendas(arquivo_vendas, vendedor_selecionado=None):
-    df_vendas = pd.read_excel(arquivo_vendas)
-    df_vendas = df_vendas.dropna(subset=["AL_COD"])
+def processar_vendas(
+    arquivo_vendas,
+    mes_referencia=None,
+    vendedor_selecionado=None,
+    data_inicial=None,
+    data_final=None,
+):
+    df_vendas = pd.read_excel(arquivo_vendas, dtype={"DAT_CAD": str})
+    df_vendas["DAT_CAD"] = pd.to_datetime(df_vendas["DAT_CAD"], errors="coerce")
 
-    if vendedor_selecionado:
+    if df_vendas["DAT_CAD"].isna().all():
+        st.error("⚠️ Erro ao processar as datas. Verifique o formato do arquivo.")
+        return 0.0, 0.0
+
+    # Se um intervalo de datas for selecionado, aplicar o filtro
+    if data_inicial and data_final:
+        df_vendas = df_vendas[
+            (df_vendas["DAT_CAD"] >= pd.Timestamp(data_inicial))
+            & (df_vendas["DAT_CAD"] <= pd.Timestamp(data_final))
+        ]
+    elif mes_referencia:
+        df_vendas = df_vendas[df_vendas["DAT_CAD"].dt.month == mes_referencia]
+
+    if df_vendas.empty:
+        st.warning("⚠️ Nenhuma venda encontrada no período selecionado.")
+        return 0.0, 0.0
+
+    if vendedor_selecionado and vendedor_selecionado != "Todos":
         df_vendas = df_vendas[df_vendas["VEN_NOME"] == vendedor_selecionado]
 
-    total_opd = df_vendas[df_vendas["AL_COD"] == "OPD"]["PED_TOTAL"].sum()
-    total_amc = df_vendas[df_vendas["AL_COD"] == "AMC"]["PED_TOTAL"].sum()
+    df_vendas["PED_TOTAL"] = pd.to_numeric(
+        df_vendas["PED_TOTAL"], errors="coerce"
+    ).fillna(0)
+
+    total_opd = df_vendas[df_vendas["PED_OBS_INT"] == "OPD"]["PED_TOTAL"].sum()
+    total_amc = df_vendas[df_vendas["PED_OBS_INT"].isin(["DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"])]["PED_TOTAL"].sum()
 
     return float(total_opd), float(total_amc)
 
@@ -105,12 +132,12 @@ def comparar_com_metas(planilha_metas, mes_referencia, total_opd, total_amc):
         return {
             "OPD": {
                 "Realizado": total_opd,
-                "Meta AN": meta_opd,
+                "Meta Mensal": meta_opd,
                 "Meta Desafio": meta_desaf_opd,
             },
             "AMC": {
                 "Realizado": total_amc,
-                "Meta AN": meta_distri,
+                "Meta Mensal": meta_distri,
                 "Meta Desafio": meta_desaf_distri,
                 "Super Meta": super_meta_distri,
             },
@@ -134,62 +161,93 @@ def gerar_grafico(categoria, dados, titulo):
 
 
 # Função para calcular os dias úteis restantes no mês a partir de hoje (sem contar com o dia atual)
-def calcular_dias_uteis_restantes(mes_referencia):
-    ano_atual = datetime.datetime.now().year
+def calcular_dias_uteis_restantes(mes_referencia, incluir_hoje=False):
+    hoje = datetime.date.today()
+    ano_atual = hoje.year
     primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
+
     if mes_referencia == 12:
         ultimo_dia = datetime.date(ano_atual + 1, 1, 1) - datetime.timedelta(days=1)
     else:
-        ultimo_dia = datetime.date(
-            ano_atual, mes_referencia + 1, 1
-        ) - datetime.timedelta(days=1)
+        ultimo_dia = datetime.date(ano_atual, mes_referencia + 1, 1) - datetime.timedelta(days=1)
 
-    # Verifique a data de hoje, mas não conte o dia atual
-    hoje = datetime.date.today()
-    if hoje > ultimo_dia:
-        return 0
+    # Lista de dias do mês de hoje até o final
+    dias_mes = pd.date_range(hoje, ultimo_dia).to_list()
 
-    # Gerar a lista de dias do mês
-    dias_mes = pd.date_range(primeiro_dia, ultimo_dia).to_list()
-
-    # Contar os dias úteis (excluindo finais de semana) restantes após hoje
-    dias_uteis_restantes = [
+    # Filtra os dias úteis conforme o parâmetro
+    dias_uteis = [
         dia.date()
         for dia in dias_mes
-        if dia.weekday() < 5
-        and dia.date() > hoje  # Verifique que o dia é posterior ao hoje
+        if dia.weekday() < 5 and (incluir_hoje or dia.date() > hoje)
     ]
 
-    # Depuração
-    print(f"Dias úteis restantes (sem contar o hoje): {dias_uteis_restantes}")
+    return len(dias_uteis)
 
-    return len(dias_uteis_restantes)
+# Função para calcular os dias úteis passados no mês
+def calcular_dias_uteis_passados(mes_referencia, incluir_hoje=False):
+    hoje = datetime.date.today()
+    ano_atual = hoje.year
+    primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
+
+    # Lista de todos os dias do mês até hoje
+    dias_mes = pd.date_range(primeiro_dia, hoje).to_list()
+
+    # Filtro de dias úteis
+    dias_uteis = [
+        dia.date() for dia in dias_mes
+        if dia.weekday() < 5 and (incluir_hoje or dia.date() < hoje)
+    ]
+
+    return len(dias_uteis)
 
 
 st.title("📊 Comparação de Metas e Vendas")
 
-caminho_metas = "META.xlsx"
-planilha_metas = carregar_planilha_metas(caminho_metas)
+caminho_metas = "resources/META.xlsx"
 
-uploaded_file = st.file_uploader("📂 Envie a planilha de vendas", type=["xlsx"])
-mes = st.selectbox(
-    "📅 Escolha o mês de referência",
-    range(1, 13),
-    format_func=lambda x: [
-        "janeiro",
-        "fevereiro",
-        "março",
-        "abril",
-        "maio",
-        "junho",
-        "julho",
-        "agosto",
-        "setembro",
-        "outubro",
-        "novembro",
-        "dezembro",
-    ][x - 1],
-)
+uploaded_file = st.file_uploader("📂 Envie a planilha de vendas (1362)", type=["xlsx"])
+
+# Opção para escolher entre "Mês" ou "Período Personalizado"
+filtro_tipo = st.radio("🔍 Escolha o tipo de filtro:", ["Mês", "Período Personalizado"])
+
+if filtro_tipo == "Mês":
+    # Se a escolha for "Mês", mostra apenas o seletor de meses
+    mes = st.selectbox(
+        "📅 Escolha o mês de referência",
+        range(1, 13),
+        format_func=lambda x: [
+            "janeiro",
+            "fevereiro",
+            "março",
+            "abril",
+            "maio",
+            "junho",
+            "julho",
+            "agosto",
+            "setembro",
+            "outubro",
+            "novembro",
+            "dezembro",
+        ][x - 1],
+    )
+    data_inicial, data_final = None, None  # Garante que não use o período
+
+else:
+    # Se a escolha for "Período Personalizado", mostra o seletor de datas
+    data_intervalo = st.date_input(
+        "📅 Selecione o período",
+        value=[datetime.date.today().replace(day=1), datetime.date.today()],
+    )
+
+    if len(data_intervalo) != 2:
+        st.error("⚠️ Selecione uma data inicial e uma data final!")
+    else:
+        data_inicial, data_final = data_intervalo
+        if data_inicial > data_final:
+            st.error("⚠️ A data inicial não pode ser maior que a data final!")
+
+    mes = None  # Garante que o filtro por mês não será usado
+
 
 if uploaded_file:
     df_vendas = pd.read_excel(uploaded_file)
@@ -198,17 +256,34 @@ if uploaded_file:
         "👤 Selecione um vendedor", ["Todos"] + list(vendedores)
     )
 
+    # Lista dos vendedores que usam a aba "LOJA"
+    vendedores_loja = ["ROBSON", "ROSESILVESTRE"]
+
+    # Define qual aba abrir com base no vendedor selecionado
+    if vendedor_selecionado == "Todos":
+        aba_meta = "GERAL"
+    elif vendedor_selecionado in vendedores_loja:
+        aba_meta = "LOJA"
+    else:
+        aba_meta = "GERAL"  # Por enquanto, os outros usam a aba GERAL
+
+    # Carrega a planilha de metas com a aba correta
+    planilha_metas = carregar_planilha_metas(caminho_metas, aba=aba_meta)
+  
 if st.button("🔄 Processar Dados"):
     with st.spinner("🔄 Processando..."):
-        aba_meta = (
-            0 if vendedor_selecionado == "Todos" else 1
-        )  # 0 para a primeira aba, 1 para a segunda
         planilha_metas = carregar_planilha_metas(caminho_metas, aba=aba_meta)
 
         total_opd, total_amc = processar_vendas(
             uploaded_file,
-            None if vendedor_selecionado == "Todos" else vendedor_selecionado,
+            (
+                mes if not (data_inicial and data_final) else None
+            ),  # Usa mês só se datas personalizadas não forem escolhidas
+            vendedor_selecionado if vendedor_selecionado != "Todos" else None,
+            data_inicial,
+            data_final,
         )
+
         comparacao = comparar_com_metas(planilha_metas, mes, total_opd, total_amc)
 
         if comparacao:
@@ -244,111 +319,84 @@ if st.button("🔄 Processar Dados"):
                     use_container_width=True,
                 )
 
+# ----------------------------------------------------------------------------------------------
+
             # Centralizando o título na página
             st.markdown(
-                """
-                <div style='text-align: center;'>
-                    <h2>📢 Status das Metas</h2>
-                </div>
-                """,
-                unsafe_allow_html=True,
+                "<h2 style='text-align: center;'>📢 Status das Metas</h2>",
+                unsafe_allow_html=True
             )
 
-            # Criando as duas colunas abaixo do título centralizado
+            # Divide visualmente o conteúdo em duas colunas
             col1, col2 = st.columns(2)
 
-            # Número de dias úteis restantes no mês
-            dias_uteis_restantes = calcular_dias_uteis_restantes(mes)
+            # ---------- Cálculo dos dias úteis ----------
+            dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False)   # até ontem
+            dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True)  # incluindo hoje
+            dias_uteis_totais = dias_uteis_passados + dias_uteis_restantes
 
-            # Evitar divisão por zero caso não haja mais dias úteis
+            # Evita divisão por zero
+            if dias_uteis_passados == 0:
+                dias_uteis_passados = 1
             if dias_uteis_restantes == 0:
                 dias_uteis_restantes = 1
 
-            # Dados para a coluna OPD (agora com a coluna 'Necessário por Dia')
-            data_opd = {
-                "Meta": ["Meta AN", "Meta Desafio", "Realizado"],
-                "Valor": [
-                    comparacao["OPD"]["Meta AN"],
-                    comparacao["OPD"]["Meta Desafio"],
-                    comparacao["OPD"]["Realizado"],
-                ],
-                "Necessário por Dia": [
-                    max(
-                        0,
-                        (comparacao["OPD"]["Meta AN"] - comparacao["OPD"]["Realizado"])
-                        / dias_uteis_restantes,
-                    ),
-                    max(
-                        0,
-                        (
-                            comparacao["OPD"]["Meta Desafio"]
-                            - comparacao["OPD"]["Realizado"]
+            # ---------- Função auxiliar para formatar valores ----------
+            def format_valor(valor):
+                return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+            # ---------- Função para calcular tendência ----------
+            def calcular_tendencia(realizado, dias_passados, dias_futuros):
+                media_diaria = realizado / dias_passados
+                tendencia_futura = media_diaria * dias_futuros
+                return tendencia_futura, media_diaria
+
+            # ---------- Geração de cards de KPI (st.metric) ----------
+            def exibir_metricas(coluna, titulo, metas, realizado):
+                with coluna:
+                    st.markdown(
+                        f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: -10px;'>{titulo}</div>",
+                        unsafe_allow_html=True
+                    )
+                    tendencia, media_diaria = calcular_tendencia(realizado, dias_uteis_passados, dias_uteis_restantes)
+
+                    for nome_meta, valor_meta in metas.items():
+                        necessario = max(0, (valor_meta - realizado) / dias_uteis_restantes)
+                        delta_color = "inverse" if tendencia >= valor_meta else "normal"
+                        st.metric(
+                            label=f"🎯 {nome_meta}",
+                            value=format_valor(valor_meta),
+                            delta=f"Nec/dia: {format_valor(necessario)}",
+                            delta_color=delta_color
                         )
-                        / dias_uteis_restantes,
-                    ),
-                    comparacao["OPD"]["Realizado"] / dias_uteis_restantes,
-                ],
+
+                    st.metric(
+                        "📈 Tendência",
+                        format_valor(tendencia),
+                        delta=f"Média: {format_valor(media_diaria)}"
+                    )
+
+# ----------------------------- Dados --------------------------------------------------------------------
+
+            # OPD
+            metas_opd = {
+                "Meta Mensal": comparacao["OPD"]["Meta Mensal"],
+                "Meta Desafio": comparacao["OPD"]["Meta Desafio"],
             }
+            realizado_opd = comparacao["OPD"]["Realizado"]
 
-            # Dados para a coluna Distribuição (agora com a coluna 'Necessário por Dia')
-            data_dist = {
-                "Meta": ["Meta AN", "Meta Desafio", "Super Meta", "Realizado"],
-                "Valor": [
-                    comparacao["AMC"]["Meta AN"],
-                    comparacao["AMC"]["Meta Desafio"],
-                    comparacao["AMC"].get("Super Meta", 0),
-                    comparacao["AMC"]["Realizado"],
-                ],
-                "Necessário por Dia": [
-                    max(
-                        0,
-                        (comparacao["AMC"]["Meta AN"] - comparacao["AMC"]["Realizado"])
-                        / dias_uteis_restantes,
-                    ),
-                    max(
-                        0,
-                        (
-                            comparacao["AMC"]["Meta Desafio"]
-                            - comparacao["AMC"]["Realizado"]
-                        )
-                        / dias_uteis_restantes,
-                    ),
-                    max(
-                        0,
-                        (
-                            comparacao["AMC"].get("Super Meta", 0)
-                            - comparacao["AMC"]["Realizado"]
-                        )
-                        / dias_uteis_restantes,
-                    ),
-                    comparacao["AMC"]["Realizado"] / dias_uteis_restantes,
-                ],
+            # Distribuição
+            metas_amc = {
+                "Meta Mensal": comparacao["AMC"]["Meta Mensal"],
+                "Meta Desafio": comparacao["AMC"]["Meta Desafio"],
+                "Super Meta": comparacao["AMC"].get("Super Meta", 0),
             }
+            realizado_amc = comparacao["AMC"]["Realizado"]
 
-            # Convertendo para DataFrame
-            df_opd = pd.DataFrame(data_opd)
-            df_dist = pd.DataFrame(data_dist)
+# ------------------------------- Exibição -------------------------------------------------------------
 
-            # Exibir tabelas nas colunas
-            with col1:
-                st.markdown(
-                    """
-                    <div style='text-align: center;'>
-                    <h3>OPD</h3>
-                    </div>""",
-                    unsafe_allow_html=True,
-                )
-                st.table(df_opd)
-
-            with col2:
-                st.markdown(
-                    """
-                    <div style='text-align: center;'>
-                    <h3>Distribuição</h3>
-                    </div>""",
-                    unsafe_allow_html=True,
-                )
-                st.table(df_dist)
+            exibir_metricas(col1, "📦 OPD", metas_opd, realizado_opd)
+            exibir_metricas(col2, "🚚 Distribuição", metas_amc, realizado_amc)
 
         else:
             st.error("❌ Não foi possível comparar com as metas. Verifique os dados.")
