@@ -13,6 +13,13 @@ def carregar_planilha_metas(caminho_arquivo, aba=0):
     df.rename(columns={df.columns[0]: "Categoria"}, inplace=True)
     return df
 
+def carregar_feriados():
+    df = pd.read_excel("resources/FERIADOS.xlsx", header=None)
+    df.columns = ['Data']
+    df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
+    # Converte para datetime.date
+    feriados = df['Data'].dt.date.tolist()
+    return feriados
 
 def processar_vendas(
     arquivo_vendas,
@@ -160,45 +167,79 @@ def gerar_grafico(categoria, dados, titulo):
     return fig
 
 
-# Função para calcular os dias úteis restantes no mês a partir de hoje (sem contar com o dia atual)
-def calcular_dias_uteis_restantes(mes_referencia, incluir_hoje=False):
+# # Função para calcular os dias úteis restantes no mês a partir de hoje (sem contar com o dia atual)
+# def calcular_dias_uteis_restantes(mes_referencia, incluir_hoje=False):
+#     hoje = datetime.date.today()
+#     ano_atual = hoje.year
+#     primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
+
+#     if mes_referencia == 12:
+#         ultimo_dia = datetime.date(ano_atual + 1, 1, 1) - datetime.timedelta(days=1)
+#     else:
+#         ultimo_dia = datetime.date(ano_atual, mes_referencia + 1, 1) - datetime.timedelta(days=1)
+
+#     # Lista de dias do mês de hoje até o final
+#     dias_mes = pd.date_range(hoje, ultimo_dia).to_list()
+
+#     # Filtra os dias úteis conforme o parâmetro
+#     dias_uteis = [
+#         dia.date()
+#         for dia in dias_mes
+#         if dia.weekday() < 5 and (incluir_hoje or dia.date() > hoje)
+#     ]
+
+#     return len(dias_uteis)
+
+def calcular_dias_uteis_restantes(mes_referencia, incluir_hoje=False, feriados=None):
     hoje = datetime.date.today()
-    ano_atual = hoje.year
-    primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
+    ano = hoje.year
+    primeiro_dia = datetime.date(ano, mes_referencia, 1)
 
     if mes_referencia == 12:
-        ultimo_dia = datetime.date(ano_atual + 1, 1, 1) - datetime.timedelta(days=1)
+        ultimo_dia = datetime.date(ano + 1, 1, 1) - datetime.timedelta(days=1)
     else:
-        ultimo_dia = datetime.date(ano_atual, mes_referencia + 1, 1) - datetime.timedelta(days=1)
+        ultimo_dia = datetime.date(ano, mes_referencia + 1, 1) - datetime.timedelta(days=1)
 
-    # Lista de dias do mês de hoje até o final
-    dias_mes = pd.date_range(hoje, ultimo_dia).to_list()
-
-    # Filtra os dias úteis conforme o parâmetro
+    dias = pd.date_range(hoje, ultimo_dia).to_list()
     dias_uteis = [
-        dia.date()
-        for dia in dias_mes
-        if dia.weekday() < 5 and (incluir_hoje or dia.date() > hoje)
+        dia.date() for dia in dias
+        if dia.weekday() < 5 and (incluir_hoje or dia.date() > hoje)  # Dias úteis (segunda a sexta)
+        and (feriados is None or dia.date() not in feriados)  # Exclui feriados se fornecidos
     ]
-
     return len(dias_uteis)
 
-# Função para calcular os dias úteis passados no mês
-def calcular_dias_uteis_passados(mes_referencia, incluir_hoje=False):
+
+def calcular_dias_uteis_passados(mes_referencia, incluir_hoje=False, feriados=None):
     hoje = datetime.date.today()
-    ano_atual = hoje.year
-    primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
+    ano = hoje.year
+    primeiro_dia = datetime.date(ano, mes_referencia, 1)
 
-    # Lista de todos os dias do mês até hoje
-    dias_mes = pd.date_range(primeiro_dia, hoje).to_list()
-
-    # Filtro de dias úteis
+    dias = pd.date_range(primeiro_dia, hoje).to_list()
     dias_uteis = [
-        dia.date() for dia in dias_mes
-        if dia.weekday() < 5 and (incluir_hoje or dia.date() < hoje)
+        dia.date() for dia in dias
+        if dia.weekday() < 5 and (incluir_hoje or dia.date() < hoje)  # Dias úteis (segunda a sexta)
+        and (feriados is None or dia.date() not in feriados)  # Exclui feriados se fornecidos
     ]
-
     return len(dias_uteis)
+
+
+
+# # Função para calcular os dias úteis passados no mês
+# def calcular_dias_uteis_passados(mes_referencia, incluir_hoje=False):
+#     hoje = datetime.date.today()
+#     ano_atual = hoje.year
+#     primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
+
+#     # Lista de todos os dias do mês até hoje
+#     dias_mes = pd.date_range(primeiro_dia, hoje).to_list()
+
+#     # Filtro de dias úteis
+#     dias_uteis = [
+#         dia.date() for dia in dias_mes
+#         if dia.weekday() < 5 and (incluir_hoje or dia.date() < hoje)
+#     ]
+
+#     return len(dias_uteis)
 
 
 st.title("📊 Comparação de Metas e Vendas")
@@ -206,6 +247,9 @@ st.title("📊 Comparação de Metas e Vendas")
 caminho_metas = "resources/META.xlsx"
 
 uploaded_file = st.file_uploader("📂 Envie a planilha de vendas (1362)", type=["xlsx"])
+
+# Carrega os feriados
+feriados = carregar_feriados()
 
 # Opção para escolher entre "Mês" ou "Período Personalizado"
 filtro_tipo = st.radio("🔍 Escolha o tipo de filtro:", ["Mês", "Período Personalizado"])
@@ -256,20 +300,36 @@ if uploaded_file:
         "👤 Selecione um vendedor", ["Todos"] + list(vendedores)
     )
 
-    # Lista dos vendedores que usam a aba "LOJA"
-    vendedores_loja = ["ROBSON", "ROSESILVESTRE"]
+# -------------------------------------------------------------------------
 
-    # Define qual aba abrir com base no vendedor selecionado
+    # DIVISÃO DE METAS POR VENDEDOR/USUARIO DO SIG2000 RELACIONANDO O MESMO A ALGUMA ABA DA PLANILHA
+    rose_loja = ["ROSESILVESTRE"]
+    robson_loja = ["ROBSON"]
+    # vendedores_loja = ["ROBSON"]
+    # danilima = ["DANILIMA"]
+
+    # SE O VENDEDOR "TODOS" FOR SELECIONADO, A "META GERAL" VAI SER IMPOSTA
     if vendedor_selecionado == "Todos":
         aba_meta = "GERAL"
-    elif vendedor_selecionado in vendedores_loja:
-        aba_meta = "LOJA"
+
+    # elif vendedor_selecionado in vendedores_loja:
+        # aba_meta = "LOJA"
+
+    # AO SELECIONAR A "ROSE" OU O "ROBSON", CADA UM TEM SUA "ABA NA PLANILHA" COM SUAS METAS
+    elif vendedor_selecionado in rose_loja:
+        aba_meta = "ROSE"
+    elif vendedor_selecionado in robson_loja:
+        aba_meta = "ROBSON"
+
+    # SE O "VENDEDOR" NAO ESTIVER ACIMA, A "ABA GERAL" SERA LIDA E USADA PARA COMPARAÇÃO DE METAS
     else:
         aba_meta = "GERAL"  # Por enquanto, os outros usam a aba GERAL
 
     # Carrega a planilha de metas com a aba correta
     planilha_metas = carregar_planilha_metas(caminho_metas, aba=aba_meta)
-  
+
+# -----------------------------------------------------------------------------------
+
 if st.button("🔄 Processar Dados"):
     with st.spinner("🔄 Processando..."):
         planilha_metas = carregar_planilha_metas(caminho_metas, aba=aba_meta)
@@ -331,8 +391,9 @@ if st.button("🔄 Processar Dados"):
             col1, col2 = st.columns(2)
 
             # ---------- Cálculo dos dias úteis ----------
-            dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False)   # até ontem
-            dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True)  # incluindo hoje
+            dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False, feriados=feriados)
+            dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True, feriados=feriados)
+
             dias_uteis_totais = dias_uteis_passados + dias_uteis_restantes
 
             # Evita divisão por zero
@@ -348,50 +409,109 @@ if st.button("🔄 Processar Dados"):
             # ---------- Função para calcular tendência ----------
             def calcular_tendencia(realizado, dias_passados, dias_futuros):
                 media_diaria = realizado / dias_passados
-                tendencia_futura = media_diaria * dias_futuros
-                return tendencia_futura, media_diaria
+                tendencia_total = realizado + (media_diaria * dias_futuros)
+                return tendencia_total, media_diaria
 
             # ---------- Geração de cards de KPI (st.metric) ----------
+            # def exibir_metricas(coluna, titulo, metas, realizado):
+            #     with coluna:
+            #         st.markdown(
+            #             f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: -10px;'>{titulo}</div>",
+            #             unsafe_allow_html=True
+            #         )
+            #         tendencia, media_diaria = calcular_tendencia(realizado, dias_uteis_passados, dias_uteis_restantes)
+
+            #         for nome_meta, valor_meta in metas.items():
+            #             necessario = max(0, (valor_meta - realizado) / dias_uteis_restantes)
+            #             delta_color = "inverse" if tendencia >= valor_meta else "normal"
+            #             st.metric(
+            #                 label=f"🎯 {nome_meta}",
+            #                 value=format_valor(valor_meta),
+            #                 delta=f"Nec/dia: {format_valor(necessario)}",
+            #                 delta_color=delta_color
+            #             )
+
+            #         st.metric(
+            #             "📈 Tendência",
+            #             format_valor(tendencia),
+            #             delta=f"Média: {format_valor(media_diaria)}"
+            #         )
+
             def exibir_metricas(coluna, titulo, metas, realizado):
                 with coluna:
                     st.markdown(
-                        f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: -10px;'>{titulo}</div>",
+                        f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: 15px;'>{titulo}</div>",
                         unsafe_allow_html=True
                     )
+
                     tendencia, media_diaria = calcular_tendencia(realizado, dias_uteis_passados, dias_uteis_restantes)
 
                     for nome_meta, valor_meta in metas.items():
                         necessario = max(0, (valor_meta - realizado) / dias_uteis_restantes)
                         delta_color = "inverse" if tendencia >= valor_meta else "normal"
-                        st.metric(
-                            label=f"🎯 {nome_meta}",
-                            value=format_valor(valor_meta),
-                            delta=f"Nec/dia: {format_valor(necessario)}",
-                            delta_color=delta_color
-                        )
 
-                    st.metric(
-                        "📈 Tendência",
-                        format_valor(tendencia),
-                        delta=f"Média: {format_valor(media_diaria)}"
-                    )
+                        # Criar duas colunas lado a lado
+                        col1, col2 = st.columns([2, 3])  # Ajuste a proporção como quiser
+
+                        with col1:
+                            st.metric(
+                                label=f"🎯 {nome_meta}",
+                                value=format_valor(valor_meta),
+                                delta=f"Nec/dia: {format_valor(necessario)}",
+                                delta_color=delta_color
+                            )
+
+                            st.metric(
+                                label="📈 Tendência (estimativa final)",
+                                value=format_valor(tendencia),
+                                delta=f"Média diária: {format_valor(media_diaria)}"
+                            )
+
+                        with col2:
+                            diferenca = tendencia - valor_meta
+                            percentual = (diferenca / valor_meta) * 100
+
+                            if diferenca >= 0:
+                                texto = f"""
+                                <div style="background-color:#262730; padding:16px; border-radius:12px; 
+                                            box-shadow:0 2px 6px rgba(0,0,0,0.1); border-left:6px solid #28a745;">
+                                    <div style="font-size:16px; font-weight:bold;">📈 Tendência positiva para <u>{nome_meta}</u></div>
+                                    <div style="font-size:22px; font-weight:bold; color:#28a745; margin-top:6px;">
+                                        +{format_valor(diferenca)} (+{percentual:.1f}%)
+                                    </div>
+                                    <div style="font-size:14px; color:#555;">Você vai ultrapassar a meta nesse ritmo</div>
+                                </div>
+                                """
+                            else:
+                                texto = f"""
+                                <div style="background-color:#262730; padding:16px; border-radius:12px; 
+                                            box-shadow:0 2px 6px rgba(0,0,0,0.1); border-left:6px solid #dc3545;">
+                                    <div style="font-size:16px; font-weight:bold;">📉 Risco de não atingir <u>{nome_meta}</u></div>
+                                    <div style="font-size:22px; font-weight:bold; color:#dc3545; margin-top:6px;">
+                                        -{format_valor(abs(diferenca))} (-{abs(percentual):.1f}%)
+                                    </div>
+                                    <div style="font-size:14px; color:#555;">Se continuar assim, vai faltar esse valor</div>
+                                </div>
+                                """
+                            st.markdown(texto, unsafe_allow_html=True)
+
 
 # ----------------------------- Dados --------------------------------------------------------------------
 
-            # OPD
+            # OPD (filtra apenas metas com valor > 0)
             metas_opd = {
-                "Meta Mensal": comparacao["OPD"]["Meta Mensal"],
-                "Meta Desafio": comparacao["OPD"]["Meta Desafio"],
+                nome: valor for nome, valor in comparacao["OPD"].items()
+                if nome != "Realizado" and valor > 0
             }
             realizado_opd = comparacao["OPD"]["Realizado"]
 
-            # Distribuição
+            # Distribuição (filtra apenas metas com valor > 0)
             metas_amc = {
-                "Meta Mensal": comparacao["AMC"]["Meta Mensal"],
-                "Meta Desafio": comparacao["AMC"]["Meta Desafio"],
-                "Super Meta": comparacao["AMC"].get("Super Meta", 0),
+                nome: valor for nome, valor in comparacao["AMC"].items()
+                if nome != "Realizado" and valor > 0
             }
             realizado_amc = comparacao["AMC"]["Realizado"]
+
 
 # ------------------------------- Exibição -------------------------------------------------------------
 
