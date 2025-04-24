@@ -21,12 +21,14 @@ def carregar_feriados():
     feriados = df['Data'].dt.date.tolist()
     return feriados
 
+# Função para processar as vendas
 def processar_vendas(
     arquivo_vendas,
     mes_referencia=None,
     vendedor_selecionado=None,
     data_inicial=None,
     data_final=None,
+    com_cdp=False  # Adiciona o parâmetro de controle da flag
 ):
     df_vendas = pd.read_excel(arquivo_vendas, dtype={"DAT_CAD": str})
     df_vendas["DAT_CAD"] = pd.to_datetime(df_vendas["DAT_CAD"], errors="coerce")
@@ -38,8 +40,8 @@ def processar_vendas(
     # Se um intervalo de datas for selecionado, aplicar o filtro
     if data_inicial and data_final:
         df_vendas = df_vendas[
-            (df_vendas["DAT_CAD"] >= pd.Timestamp(data_inicial))
-            & (df_vendas["DAT_CAD"] <= pd.Timestamp(data_final))
+            (df_vendas["DAT_CAD"] >= pd.Timestamp(data_inicial)) & 
+            (df_vendas["DAT_CAD"] <= pd.Timestamp(data_final))
         ]
     elif mes_referencia:
         df_vendas = df_vendas[df_vendas["DAT_CAD"].dt.month == mes_referencia]
@@ -51,15 +53,30 @@ def processar_vendas(
     if vendedor_selecionado and vendedor_selecionado != "Todos":
         df_vendas = df_vendas[df_vendas["VEN_NOME"] == vendedor_selecionado]
 
-    df_vendas["PED_TOTAL"] = pd.to_numeric(
-        df_vendas["PED_TOTAL"], errors="coerce"
-    ).fillna(0)
+    df_vendas["PED_TOTAL"] = pd.to_numeric(df_vendas["PED_TOTAL"], errors="coerce").fillna(0)
 
-    total_opd = df_vendas[df_vendas["PED_OBS_INT"] == "OPD"]["PED_TOTAL"].sum()
-    total_amc = df_vendas[df_vendas["PED_OBS_INT"].isin(["DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"])]["PED_TOTAL"].sum()
+    # Lista dos nomes da Casa do Pedreiro para excluir, se necessário
+    nomes_cdp = [
+        "DO PEDREIRO DO LITORAL COMERC DE MATERIAIS DE CONSTRUCAO LTD",
+        "DO PEDREIRO DO LITORAL COMERCIO DE MATERIAIS DE CONSTRUCAO",
+    ]
+
+    # Filtro base para OPD e faturado
+    filtro_opd = (df_vendas["PED_OBS_INT"] == "OPD") & (df_vendas["PED_STATUS"] == "F")
+
+    # Se com_cdp for False, remove as vendas da Casa do Pedreiro
+    if not com_cdp:
+        df_vendas = df_vendas[~df_vendas["CLI_RAZ"].isin(nomes_cdp)]  # Excluir as vendas da Casa do Pedreiro
+
+    # Soma dos valores de OPD com o filtro aplicado
+    total_opd = df_vendas[filtro_opd]["PED_TOTAL"].sum()
+
+    # Soma dos valores para AMC
+    total_amc = df_vendas[df_vendas["PED_OBS_INT"].isin([
+        "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"
+    ])]["PED_TOTAL"].sum()
 
     return float(total_opd), float(total_amc)
-
 
 def calcular_status(realizado, metas, mes_referencia):
     status = ""
@@ -167,29 +184,6 @@ def gerar_grafico(categoria, dados, titulo):
     return fig
 
 
-# # Função para calcular os dias úteis restantes no mês a partir de hoje (sem contar com o dia atual)
-# def calcular_dias_uteis_restantes(mes_referencia, incluir_hoje=False):
-#     hoje = datetime.date.today()
-#     ano_atual = hoje.year
-#     primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
-
-#     if mes_referencia == 12:
-#         ultimo_dia = datetime.date(ano_atual + 1, 1, 1) - datetime.timedelta(days=1)
-#     else:
-#         ultimo_dia = datetime.date(ano_atual, mes_referencia + 1, 1) - datetime.timedelta(days=1)
-
-#     # Lista de dias do mês de hoje até o final
-#     dias_mes = pd.date_range(hoje, ultimo_dia).to_list()
-
-#     # Filtra os dias úteis conforme o parâmetro
-#     dias_uteis = [
-#         dia.date()
-#         for dia in dias_mes
-#         if dia.weekday() < 5 and (incluir_hoje or dia.date() > hoje)
-#     ]
-
-#     return len(dias_uteis)
-
 def calcular_dias_uteis_restantes(mes_referencia, incluir_hoje=False, feriados=None):
     hoje = datetime.date.today()
     ano = hoje.year
@@ -221,25 +215,6 @@ def calcular_dias_uteis_passados(mes_referencia, incluir_hoje=False, feriados=No
         and (feriados is None or dia.date() not in feriados)  # Exclui feriados se fornecidos
     ]
     return len(dias_uteis)
-
-
-
-# # Função para calcular os dias úteis passados no mês
-# def calcular_dias_uteis_passados(mes_referencia, incluir_hoje=False):
-#     hoje = datetime.date.today()
-#     ano_atual = hoje.year
-#     primeiro_dia = datetime.date(ano_atual, mes_referencia, 1)
-
-#     # Lista de todos os dias do mês até hoje
-#     dias_mes = pd.date_range(primeiro_dia, hoje).to_list()
-
-#     # Filtro de dias úteis
-#     dias_uteis = [
-#         dia.date() for dia in dias_mes
-#         if dia.weekday() < 5 and (incluir_hoje or dia.date() < hoje)
-#     ]
-
-#     return len(dias_uteis)
 
 
 st.title("📊 Comparação de Metas e Vendas")
@@ -300,26 +275,26 @@ if uploaded_file:
         "👤 Selecione um vendedor", ["Todos"] + list(vendedores)
     )
 
-# -------------------------------------------------------------------------
-
     # DIVISÃO DE METAS POR VENDEDOR/USUARIO DO SIG2000 RELACIONANDO O MESMO A ALGUMA ABA DA PLANILHA
     rose_loja = ["ROSESILVESTRE"]
     robson_loja = ["ROBSON"]
+    danilima_d = ["DANILIMA"]
+    renato_d = ["JOSE RENATO MAULER"]
     # vendedores_loja = ["ROBSON"]
-    # danilima = ["DANILIMA"]
 
     # SE O VENDEDOR "TODOS" FOR SELECIONADO, A "META GERAL" VAI SER IMPOSTA
     if vendedor_selecionado == "Todos":
         aba_meta = "GERAL"
-
-    # elif vendedor_selecionado in vendedores_loja:
-        # aba_meta = "LOJA"
 
     # AO SELECIONAR A "ROSE" OU O "ROBSON", CADA UM TEM SUA "ABA NA PLANILHA" COM SUAS METAS
     elif vendedor_selecionado in rose_loja:
         aba_meta = "ROSE"
     elif vendedor_selecionado in robson_loja:
         aba_meta = "ROBSON"
+    elif vendedor_selecionado in danilima_d:
+        aba_meta = "DANILIMA"    
+    elif vendedor_selecionado in renato_d:
+        aba_meta = "RENATO"      
 
     # SE O "VENDEDOR" NAO ESTIVER ACIMA, A "ABA GERAL" SERA LIDA E USADA PARA COMPARAÇÃO DE METAS
     else:
@@ -328,26 +303,39 @@ if uploaded_file:
     # Carrega a planilha de metas com a aba correta
     planilha_metas = carregar_planilha_metas(caminho_metas, aba=aba_meta)
 
-# -----------------------------------------------------------------------------------
+# Adiciona o filtro de Casa do Pedreiro
+com_cdp = st.checkbox("Incluir vendas da Casa do Pedreiro", value=True)
 
 if st.button("🔄 Processar Dados"):
     with st.spinner("🔄 Processando..."):
         planilha_metas = carregar_planilha_metas(caminho_metas, aba=aba_meta)
 
+        # Passar o valor de com_cdp para a função de processamento
         total_opd, total_amc = processar_vendas(
             uploaded_file,
-            (
-                mes if not (data_inicial and data_final) else None
-            ),  # Usa mês só se datas personalizadas não forem escolhidas
+            mes if not (data_inicial and data_final) else None,  # Mes se não tiver período
             vendedor_selecionado if vendedor_selecionado != "Todos" else None,
             data_inicial,
             data_final,
+            com_cdp  # Passando o valor da checkbox diretamente aqui
         )
 
         comparacao = comparar_com_metas(planilha_metas, mes, total_opd, total_amc)
+        # Soma total quando for "Todos"
+        if vendedor_selecionado == "Todos":
+            soma_total = total_opd + total_amc
+            st.markdown(
+                f"""
+                <div style='background-color:#262730; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'>
+                    <h4 style='color:#ffffff;'>💰 Total Geral da Empresa: R$ {soma_total:,.2f}</h4>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         if comparacao:
             col1, col2 = st.columns(2)
+            
             with col1:
                 st.markdown(
                     f"""
@@ -368,6 +356,8 @@ if st.button("🔄 Processar Dados"):
                     unsafe_allow_html=True,
                 )
 
+# ------------------------------------------------------------------------------------
+            # Gráficos
             with col1:
                 st.plotly_chart(
                     gerar_grafico("OPD", comparacao["OPD"], "Relação de OPD"),
@@ -378,6 +368,7 @@ if st.button("🔄 Processar Dados"):
                     gerar_grafico("AMC", comparacao["AMC"], "Relação de Distribuição"),
                     use_container_width=True,
                 )
+
 
 # ----------------------------------------------------------------------------------------------
 
@@ -411,31 +402,6 @@ if st.button("🔄 Processar Dados"):
                 media_diaria = realizado / dias_passados
                 tendencia_total = realizado + (media_diaria * dias_futuros)
                 return tendencia_total, media_diaria
-
-            # ---------- Geração de cards de KPI (st.metric) ----------
-            # def exibir_metricas(coluna, titulo, metas, realizado):
-            #     with coluna:
-            #         st.markdown(
-            #             f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: -10px;'>{titulo}</div>",
-            #             unsafe_allow_html=True
-            #         )
-            #         tendencia, media_diaria = calcular_tendencia(realizado, dias_uteis_passados, dias_uteis_restantes)
-
-            #         for nome_meta, valor_meta in metas.items():
-            #             necessario = max(0, (valor_meta - realizado) / dias_uteis_restantes)
-            #             delta_color = "inverse" if tendencia >= valor_meta else "normal"
-            #             st.metric(
-            #                 label=f"🎯 {nome_meta}",
-            #                 value=format_valor(valor_meta),
-            #                 delta=f"Nec/dia: {format_valor(necessario)}",
-            #                 delta_color=delta_color
-            #             )
-
-            #         st.metric(
-            #             "📈 Tendência",
-            #             format_valor(tendencia),
-            #             delta=f"Média: {format_valor(media_diaria)}"
-            #         )
 
             def exibir_metricas(coluna, titulo, metas, realizado):
                 with coluna:
@@ -519,6 +485,6 @@ if st.button("🔄 Processar Dados"):
             exibir_metricas(col2, "🚚 Distribuição", metas_amc, realizado_amc)
 
         else:
-            st.error("❌ Não foi possível comparar com as metas. Verifique os dados.")
+            st.error("❌ Não foi possível comparar com as metas. Verifique os dados.")     
 else:
     st.info("📂 Por favor, envie a planilha de vendas e selecione o mês de referência.")
