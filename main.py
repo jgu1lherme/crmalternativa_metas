@@ -323,75 +323,73 @@ if st.button("🔄 Processar Dados"):
         comparacao = comparar_com_metas(planilha_metas, mes, total_opd, total_amc) 
         
                  
-# ========================== Soma total quando for "Todos"==================================
-    # Cálculo de dias úteis
-    dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False, feriados=feriados)
-    dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True, feriados=feriados)
+    # ========================== Soma total quando for "Todos"==================================
+        # Cálculo de dias úteis
+        dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False, feriados=feriados)
+        dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True, feriados=feriados)
 
-    # Evita divisão por zero
-    if dias_uteis_passados == 0:
-        dias_uteis_passados = 1
-    if dias_uteis_restantes == 0:
-        dias_uteis_restantes = 1
+        # Evita divisão por zero
+        if dias_uteis_passados == 0:
+            dias_uteis_passados = 1
+        if dias_uteis_restantes == 0:
+            dias_uteis_restantes = 1
 
-    # Funções auxiliares
-    def format_valor(valor):
-        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # Funções auxiliares
+        def format_valor(valor):
+            return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-    def calcular_tendencia(realizado, dias_passados, dias_futuros):
-        media_diaria = realizado / dias_passados
-        tendencia_total = realizado + (media_diaria * dias_futuros)
-        return tendencia_total, media_diaria
+        def calcular_tendencia(realizado, dias_passados, dias_futuros):
+            media_diaria = realizado / dias_passados
+            tendencia_total = realizado + (media_diaria * dias_futuros)
+            return tendencia_total, media_diaria
 
-    # Quando for "Todos"
-    if vendedor_selecionado == "Todos":
-        soma_total = total_opd + total_amc
-        realizado_geral = soma_total
+        # Quando for "Todos"
+        if vendedor_selecionado == "Todos":
+            soma_total = total_opd + total_amc
+            realizado_geral = soma_total
 
-        # Metas
-        meta_geral = comparacao["OPD"]["Meta Mensal"] + comparacao["AMC"]["Meta Mensal"]
-        meta_desafio = comparacao["OPD"]["Meta Desafio"] + comparacao["AMC"]["Meta Desafio"]
-        super_meta = comparacao["AMC"]["Super Meta"]
+            # Metas
+            meta_geral = comparacao["OPD"]["Meta Mensal"] + comparacao["AMC"]["Meta Mensal"]
+            meta_desafio = comparacao["OPD"]["Meta Desafio"] + comparacao["AMC"]["Meta Desafio"]
+            super_meta = comparacao["AMC"]["Super Meta"]
 
-        # Cálculos
-        def gerar_bloco_meta(titulo, meta_valor):
-            tendencia, media_diaria = calcular_tendencia(realizado_geral, dias_uteis_passados, dias_uteis_restantes)
-            necessario_por_dia = max(0, (meta_valor - realizado_geral) / dias_uteis_restantes)
-            html = (
-                f"<div style='background-color:#262730; padding:10px; border-radius:10px; width:33%; text-align:center; margin-bottom:10px;'>"
-                f"<h4 style='color:#ffffff;'>{titulo}: {format_valor(meta_valor)}</h4>"
-                f"<p style='color:#cccccc; margin:4px;'>📈 Tendência: {format_valor(tendencia)}</p>"
-                f"<p style='color:#cccccc; margin:4px;'>📊 Média Diária: {format_valor(media_diaria)}</p>"
-                f"<p style='color:#cccccc; margin:4px;'>📅 Necessário/dia: {format_valor(necessario_por_dia)}</p>"
-                f"</div>"
+            # Cálculos
+            def gerar_bloco_meta(titulo, meta_valor):
+                tendencia, media_diaria = calcular_tendencia(realizado_geral, dias_uteis_passados, dias_uteis_restantes)
+                necessario_por_dia = max(0, (meta_valor - realizado_geral) / dias_uteis_restantes)
+                html = (
+                    f"<div style='background-color:#262730; padding:10px; border-radius:10px; width:33%; text-align:center; margin-bottom:10px;'>"
+                    f"<h4 style='color:#ffffff;'>{titulo}: {format_valor(meta_valor)}</h4>"
+                    f"<p style='color:#cccccc; margin:4px;'>📈 Tendência: {format_valor(tendencia)}</p>"
+                    f"<p style='color:#cccccc; margin:4px;'>📊 Média Diária: {format_valor(media_diaria)}</p>"
+                    f"<p style='color:#cccccc; margin:4px;'>📅 Necessário/dia: {format_valor(necessario_por_dia)}</p>"
+                    f"</div>"
+                )
+                return html
+
+            # Gerar os blocos
+            bloco_mensal = gerar_bloco_meta("Meta Mensal", meta_geral)
+            bloco_desafio = gerar_bloco_meta("Meta Desafio", meta_desafio)
+            bloco_super = gerar_bloco_meta("Super Meta", super_meta)
+
+            # Exibir Total Geral
+            st.markdown(
+                f"<div style='background-color:#262730; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'>"
+                f"<h4 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h4>"
+                f"</div>",
+                unsafe_allow_html=True,
             )
-            return html
 
-        # Gerar os blocos
-        bloco_mensal = gerar_bloco_meta("Meta Mensal", meta_geral)
-        bloco_desafio = gerar_bloco_meta("Meta Desafio", meta_desafio)
-        bloco_super = gerar_bloco_meta("Super Meta", super_meta)
+            # Exibir blocos lado a lado
+            st.markdown(
+                f"<div style='display: flex; justify-content: space-between; gap: 10px; margin-top:0px;'>"
+                f"{bloco_mensal}"
+                f"{bloco_desafio}"
+                f"{bloco_super}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
-        # Exibir Total Geral
-        st.markdown(
-            f"<div style='background-color:#262730; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'>"
-            f"<h4 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h4>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-        # Exibir blocos lado a lado
-        st.markdown(
-            f"<div style='display: flex; justify-content: space-between; gap: 10px; margin-top:0px;'>"
-            f"{bloco_mensal}"
-            f"{bloco_desafio}"
-            f"{bloco_super}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-
-# =========================================================================================
         if comparacao:
             col1, col2 = st.columns(2)
             
@@ -415,7 +413,6 @@ if st.button("🔄 Processar Dados"):
                     unsafe_allow_html=True,
                 )
 
-# ------------------------------------------------------------------------------------
             # Gráficos
             with col1:
                 st.plotly_chart(
