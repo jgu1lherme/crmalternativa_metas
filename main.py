@@ -22,6 +22,7 @@ def carregar_feriados():
     return feriados
 
 # Função para processar as vendas
+# Função para processar as vendas
 def processar_vendas(
     arquivo_vendas,
     mes_referencia=None,
@@ -36,15 +37,34 @@ def processar_vendas(
     if df_vendas["DAT_CAD"].isna().all():
         st.error("⚠️ Erro ao processar as datas. Verifique o formato do arquivo.")
         return 0.0, 0.0
+    
+    df_vendas["CLI_RAZ"] = df_vendas["CLI_RAZ"].str.strip()  # Remove espaços extras
+    df_vendas["PED_OBS_INT"] = df_vendas["PED_OBS_INT"].str.strip()  # Remove espaços extras
 
     # Se um intervalo de datas for selecionado, aplicar o filtro
     if data_inicial and data_final:
+        # Convertendo para apenas data (sem hora)
+        df_vendas["DAT_CAD"] = df_vendas["DAT_CAD"].dt.date  # Remove a hora, fica apenas a data
+
         df_vendas = df_vendas[
-            (df_vendas["DAT_CAD"] >= pd.Timestamp(data_inicial)) & 
-            (df_vendas["DAT_CAD"] <= pd.Timestamp(data_final))
+            (df_vendas["DAT_CAD"] >= pd.to_datetime(data_inicial).date()) & 
+            (df_vendas["DAT_CAD"] <= pd.to_datetime(ultimo_dia_mes).date())
         ]
+
+
     elif mes_referencia:
         df_vendas = df_vendas[df_vendas["DAT_CAD"].dt.month == mes_referencia]
+
+    # Definir a data_final se não for fornecida
+    if data_final:
+        data_final = pd.to_datetime(data_final)
+        ultimo_dia_mes = pd.Timestamp(data_final.replace(day=1)) + pd.DateOffset(months=1) - pd.Timedelta(days=1)
+    else:
+        ultimo_dia_mes = df_vendas["DAT_CAD"].max()  # Se não foi fornecida data_final, pega o último dia disponível nas vendas
+
+    # Ajuste de data_final, se necessário
+    if data_final:
+        df_vendas = df_vendas[df_vendas["DAT_CAD"] <= ultimo_dia_mes]
 
     if df_vendas.empty:
         st.warning("⚠️ Nenhuma venda encontrada no período selecionado.")
@@ -54,6 +74,7 @@ def processar_vendas(
         df_vendas = df_vendas[df_vendas["VEN_NOME"] == vendedor_selecionado]
 
     df_vendas["PED_TOTAL"] = pd.to_numeric(df_vendas["PED_TOTAL"], errors="coerce").fillna(0)
+
 
     # Lista dos nomes da Casa do Pedreiro para excluir, se necessário
     nomes_cdp = [
@@ -72,11 +93,15 @@ def processar_vendas(
     total_opd = df_vendas[filtro_opd]["PED_TOTAL"].sum()
 
     # Soma dos valores para AMC
-    total_amc = df_vendas[df_vendas["PED_OBS_INT"].isin([
-        "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"
-    ])]["PED_TOTAL"].sum()
+    total_amc = df_vendas[df_vendas["PED_OBS_INT"].isin([ "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"])]["PED_TOTAL"].sum()
+
+    # Exibir o primeiro e o último dia da venda
+    st.write(df_vendas["DAT_CAD"].min(), ultimo_dia_mes)
+    st.write(df_vendas["DAT_CAD"].min(), df_vendas["DAT_CAD"].max())  # Verifique se as datas são válidas
+    st.dataframe(df_vendas)
 
     return float(total_opd), float(total_amc)
+
 
 def calcular_status(realizado, metas, mes_referencia):
     status = ""
@@ -318,10 +343,11 @@ if st.button("🔄 Processar Dados"):
             data_inicial,
             data_final,
             com_cdp  # Passando o valor da checkbox diretamente aqui
+            
         )
 
         comparacao = comparar_com_metas(planilha_metas, mes, total_opd, total_amc) 
-        
+
                  
     # ========================== Soma total quando for "Todos"==================================
         # Cálculo de dias úteis
