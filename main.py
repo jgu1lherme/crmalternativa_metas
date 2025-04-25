@@ -95,10 +95,10 @@ def processar_vendas(
     # Soma dos valores para AMC
     total_amc = df_vendas[df_vendas["PED_OBS_INT"].isin([ "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"])]["PED_TOTAL"].sum()
 
-    # Exibir o primeiro e o último dia da venda
-    st.write(df_vendas["DAT_CAD"].min(), ultimo_dia_mes)
-    st.write(df_vendas["DAT_CAD"].min(), df_vendas["DAT_CAD"].max())  # Verifique se as datas são válidas
-    st.dataframe(df_vendas)
+    # # Exibir o primeiro e o último dia da venda
+    # st.write(df_vendas["DAT_CAD"].min(), ultimo_dia_mes)
+    # st.write(df_vendas["DAT_CAD"].min(), df_vendas["DAT_CAD"].max())  # Verifique se as datas são válidas
+    # st.dataframe(df_vendas)
 
     return float(total_opd), float(total_amc)
 
