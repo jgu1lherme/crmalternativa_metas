@@ -402,7 +402,7 @@ if st.button("🔄 Processar Dados"):
 
             # Exibir Total Geral
             st.markdown(
-                f"<div style='background-color:#f35303; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'>"
+                f"<div style='background-color:#272731; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'>"
                 f"<h4 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h4>"
                 f"</div>",
                 unsafe_allow_html=True,
