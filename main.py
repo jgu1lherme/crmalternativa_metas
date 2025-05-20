@@ -5,7 +5,9 @@ import numpy as np
 import plotly.express as px
 
 # Configurar a página para sempre ser exibida em widescreen
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="Nova Alternativa - Metas", page_icon="logo.png", layout="wide"
+)
 
 
 def carregar_planilha_metas(caminho_arquivo, aba=0):
