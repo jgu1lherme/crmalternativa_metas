@@ -1,2 +1,6 @@
 [theme]
 base="dark"
+
+[general]
+page_title = "Metas - Nova Alternativa"
+page_icon = "📊"
