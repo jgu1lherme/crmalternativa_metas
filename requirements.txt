@@ -1,42 +1,29 @@
---upgrade
-pip
-
-# App principal
+# Bibliotecas essenciais
 streamlit>=1.25
-
-# Bibliotecas usuais
 pandas>=2.0
 numpy>=1.25
-altair>=5.0
 plotly>=5.0
-matplotlib
-scipy
+altair>=5.0
+pydeck
 
-# Backend web (se realmente usar)
-Flask
-Flask-Login
-Flask-SQLAlchemy
-SQLAlchemy
-
-# PDF e documentos
+# Leitura de arquivos e PDF
+openpyxl
 pdfplumber
 PyPDF2
 pdf2image
 python-docx
 docx2pdf
-
-# Imagens
 pillow
 PyMuPDF
 
-# Outros utilitários
+# Web e banco de dados (se usados)
+Flask
+Flask-Login
+Flask-SQLAlchemy
+SQLAlchemy
+
+# Utilitários
 requests
-openpyxl
 watchdog
 tqdm
-
-# Para gráficos e visualizações
-pydeck
-
-# Para compatibilidade
 typing_extensions
