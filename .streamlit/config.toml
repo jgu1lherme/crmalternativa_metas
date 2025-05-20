@@ -3,4 +3,4 @@ base="dark"
 
 [general]
 page_title = "Metas - Nova Alternativa"
-page_icon = "📊"
+page_icon = "./logo.png"
