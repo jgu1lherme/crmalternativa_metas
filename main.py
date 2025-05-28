@@ -397,7 +397,7 @@ pagina_selecionada = st.sidebar.radio(
 st.title(f"📈 {pagina_selecionada}")
 
 caminho_metas = "resources/META.xlsx"
-caminho_vendas_padrao = "resources/VENDAS.xlsx"
+caminho_vendas_padrao = "resources/vendas.xlsx"
 uploaded_file = caminho_vendas_padrao
 
 # Carrega os feriados
