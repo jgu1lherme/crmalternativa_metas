@@ -717,8 +717,8 @@ else:
                     st.markdown("---")
                     st.subheader("Resumo do Vendedor no Período")
                     col1_vend, col2_vend, col3_vend = st.columns(3)
-                    col1_vend.metric("Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
-                    col2_vend.metric("Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
+                    col1_vend.metric("🔹 Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
+                    col2_vend.metric("🔸 Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
                     col3_vend.metric("💰 Total Geral Vendedor", f"R$ {totais_vendedor.get('Total', 0):,.2f}")
                 else:
                     st.info(f"Nenhuma venda OPD ou Distribuição encontrada para {vendedor_selecionado_sess} no período.")
