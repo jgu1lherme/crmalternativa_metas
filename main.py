@@ -5,7 +5,11 @@ import numpy as np
 import plotly.express as px
 
 # Configurar a página para sempre ser exibida em widescreen
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="BI - Nova Alternativa",
+    page_icon="assets/logo.png",
+    layout="wide"
+    )
 
 # --- FUNÇÕES EXISTENTES (Com pequenas adaptações) ---
 
@@ -583,7 +587,7 @@ else:
                     necessario_por_dia = max(0, (meta_valor - realizado_geral) / dias_uteis_restantes_calc) if dias_uteis_restantes_calc > 0 else (meta_valor - realizado_geral)
 
                     html = (
-                        f"<div style='background-color:#262730; padding:10px; border-radius:10px; width:33%; text-align:center; margin-bottom:10px;'>"
+                        f"<div style='background-color:#161616; padding:10px; border-radius:10px; width:33%; text-align:center; margin-bottom:10px;'>"
                         f"<h4 style='color:#ffffff;'>{titulo}: {format_valor(meta_valor)}</h4>"
                         f"<p style='color:#cccccc; margin:4px;'>📈 Tendência: {format_valor(tendencia)}</p>"
                         f"<p style='color:#cccccc; margin:4px;'>📊 Média Diária Realizada: {format_valor(media_diaria)}</p>"
@@ -596,7 +600,7 @@ else:
                 bloco_desafio = gerar_bloco_meta("Meta Desafio", meta_desafio)
                 bloco_super = gerar_bloco_meta("Super Meta", super_meta)
 
-                st.markdown(f"<div style='background-color:#262730; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'><h4 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h4></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background-color:#161616; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'><h4 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h4></div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='display: flex; justify-content: space-between; gap: 10px; margin-top:0px;'>{bloco_mensal}{bloco_desafio}{bloco_super}</div>", unsafe_allow_html=True)
 
             col1_chart, col2_chart = st.columns(2)
@@ -650,7 +654,7 @@ else:
                             texto_rodape = f"Projeção de ficar abaixo da meta em {sinal}{format_valor(abs(diferenca_tendencia_meta))}."
 
                         texto_html = f"""
-                        <div style="background-color:#262730; padding:16px; border-radius:12px; margin-bottom:15px;
+                        <div style="background-color:#161616; padding:16px; border-radius:12px; margin-bottom:15px;
                                     box-shadow:0 2px 6px rgba(0,0,0,0.1); border-left:6px solid {cor_borda};">
                             <div style="font-size:16px; font-weight:bold;">{texto_status}</div>
                             <div style="font-size:22px; font-weight:bold; color:{cor_borda}; margin-top:6px;">
