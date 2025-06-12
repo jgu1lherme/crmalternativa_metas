@@ -382,6 +382,35 @@ def gerar_tabela_vendedor(df_vendas_filtrado):
     ]]
     return tabela_final, totais
 
+def gerar_dados_ranking(df_vendas_filtrado):
+    """
+    Prepara os dados para o ranking de vendedores, mantendo os valores numéricos.
+    """
+    if df_vendas_filtrado is None or df_vendas_filtrado.empty:
+        return pd.DataFrame()
+
+    df = df_vendas_filtrado.copy()
+    df['Tipo Venda'] = np.where(
+        (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F'), 'OPD',
+        np.where(df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']), 'Distribuição', 'Outros')
+    )
+    df_validos = df[df['Tipo Venda'].isin(['OPD', 'Distribuição'])]
+
+    tabela = pd.pivot_table(
+        df_validos,
+        values='PED_TOTAL',
+        index='VEN_NOME',
+        columns='Tipo Venda',
+        aggfunc='sum',
+        fill_value=0
+    )
+
+    if 'OPD' not in tabela.columns: tabela['OPD'] = 0
+    if 'Distribuição' not in tabela.columns: tabela['Distribuição'] = 0
+
+    return tabela.reset_index().rename(columns={'VEN_NOME': 'Vendedor'})
+
+
 # --- INTERFACE STREAMLIT ---
 
 st.sidebar.title("📊 Navegação")
@@ -683,12 +712,11 @@ else:
                 with col2_m:
                     st.info("Dados de metas Distribuição (AMC) não disponíveis.")
 
-
     elif pagina_selecionada == "Relatórios Detalhados":
         if df_filtrado is None or df_filtrado.empty:
             st.warning("Nenhum dado para exibir nos Relatórios com os filtros atuais.")
         else:
-            if vendedor_selecionado_sess == "Todos": # Use a variável da sessão
+            if vendedor_selecionado_sess == "Todos":
                 st.subheader("📋 Visão Geral da Empresa")
                 tipo_visao_geral = st.radio(
                     "Escolha como visualizar os dados gerais:",
@@ -698,19 +726,13 @@ else:
                 if tipo_visao_geral == "Resumo por Vendedor":
                     st.markdown("##### Total de Vendas por Vendedor")
                     tabela_geral_df = gerar_tabela_geral(df_filtrado)
-                    if not tabela_geral_df.empty:
-                        st.dataframe(tabela_geral_df, use_container_width=True)
-                    else:
-                        st.info("Nenhuma venda OPD ou Distribuição encontrada para o resumo geral.")
+                    st.dataframe(tabela_geral_df, use_container_width=True)
                 elif tipo_visao_geral == "Resumo Dia a Dia (Empresa)":
                     st.markdown("##### Vendas Resumidas da Empresa (Dia a Dia)")
                     tabela_resumo_dia_df = gerar_tabela_diaria_empresa(df_filtrado)
-                    if not tabela_resumo_dia_df.empty:
-                        st.dataframe(tabela_resumo_dia_df, use_container_width=True)
-                    else:
-                        st.info("Nenhuma venda OPD ou Distribuição encontrada para o resumo diário.")
+                    st.dataframe(tabela_resumo_dia_df, use_container_width=True)
             else:
-                st.subheader(f"📋 Detalhe de Vendas - {vendedor_selecionado_sess}") # Use a variável da sessão
+                st.subheader(f"📋 Detalhe de Vendas - {vendedor_selecionado_sess}")
                 tabela_detalhada, totais_vendedor = gerar_tabela_vendedor(df_filtrado)
                 if not tabela_detalhada.empty:
                     st.dataframe(tabela_detalhada, use_container_width=True)
@@ -720,5 +742,39 @@ else:
                     col1_vend.metric("🔹 Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
                     col2_vend.metric("🔸 Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
                     col3_vend.metric("💰 Total Geral Vendedor", f"R$ {totais_vendedor.get('Total', 0):,.2f}")
-                else:
-                    st.info(f"Nenhuma venda OPD ou Distribuição encontrada para {vendedor_selecionado_sess} no período.")
+
+                    # --- Ranking abaixo do relatório ---
+st.markdown("---")
+st.subheader("🏆 Ranking de Vendedores no Período")
+
+df_ranking = gerar_dados_ranking(df_filtrado)
+
+if not df_ranking.empty:
+    col1, col2 = st.columns(2)
+    for tipo_rank, col in zip(["OPD", "Distribuição"], [col1, col2]):
+        if tipo_rank in df_ranking.columns and df_ranking[tipo_rank].sum() > 0:
+            with col:
+                st.markdown(f"##### {tipo_rank}")
+                df_sorted = df_ranking.sort_values(by=tipo_rank, ascending=False)
+                df_top3 = df_sorted.head(3).copy()
+
+                # Cores ouro, prata, bronze
+                cores = ['#e02500', '#e93900', '#f35202']
+                df_top3['Cor'] = cores[:len(df_top3)]
+
+                fig = px.bar(
+                    df_top3.sort_values(by=tipo_rank, ascending=True),
+                    x=tipo_rank, y="Vendedor",
+                    orientation='h',
+                    text_auto=True,
+                    color='Cor',
+                    color_discrete_map={c: c for c in cores}
+                )
+                fig.update_traces(texttemplate='R$ %{x:,.2f}')
+                fig.update_layout(height=300, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            with col:
+                st.info(f"Nenhuma venda '{tipo_rank}' encontrada.")
+else:
+    st.info("Ranking não pôde ser gerado. Verifique os dados.")
