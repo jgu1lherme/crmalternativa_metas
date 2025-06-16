@@ -609,7 +609,7 @@ else:
                 realizado_geral = soma_total
                 meta_geral = comparacao.get("OPD", {}).get("Meta Mensal", 0) + comparacao.get("AMC", {}).get("Meta Mensal", 0)
                 meta_desafio = comparacao.get("OPD", {}).get("Meta Desafio", 0) + comparacao.get("AMC", {}).get("Meta Desafio", 0)
-                super_meta = comparacao.get("AMC", {}).get("Super Meta", 0)
+                super_meta = comparacao.get("AMC", {}).get("Super Meta", 0) + comparacao.get("OPD", {}).get("Meta Desafio", 0)
 
                 def gerar_bloco_meta(titulo, meta_valor):
                     tendencia, media_diaria = calcular_tendencia(realizado_geral, dias_uteis_passados_calc, dias_uteis_restantes_calc)
