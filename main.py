@@ -139,10 +139,12 @@ def processar_vendas(df_vendas_filtrado):
     filtro_opd = (df_vendas_filtrado["PED_OBS_INT"] == "OPD") & (df_vendas_filtrado["PED_STATUS"] == "F")
     total_opd = df_vendas_filtrado[filtro_opd]["PED_TOTAL"].sum()
 
-    # Soma dos valores para AMC
-    total_amc = df_vendas_filtrado[df_vendas_filtrado["PED_OBS_INT"].isin([ "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"])]["PED_TOTAL"].sum()
+    # Filtro para pedidos de distribuição com status F ou N
+    filtro_distribuicao = df_vendas_filtrado["PED_OBS_INT"].isin([ "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"]) & (df_vendas_filtrado["PED_STATUS"].isin(["F", "N"]))
+    total_amc = df_vendas_filtrado[filtro_distribuicao]["PED_TOTAL"].sum()
 
-    return float(total_opd), float(total_amc)
+    return total_opd, total_amc
+
 
 # --- FUNÇÕES EXISTENTES (calcular_status, comparar_com_metas, gerar_grafico, calcular_dias_uteis) ---
 def calcular_status(realizado, metas, mes_referencia, feriados):
