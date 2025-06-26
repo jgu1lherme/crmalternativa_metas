@@ -139,12 +139,14 @@ def processar_vendas(df_vendas_filtrado):
     filtro_opd = (df_vendas_filtrado["PED_OBS_INT"] == "OPD") & (df_vendas_filtrado["PED_STATUS"] == "F")
     total_opd = df_vendas_filtrado[filtro_opd]["PED_TOTAL"].sum()
 
+    # Soma dos valores para AMC
+    # total_amc = df_vendas_filtrado[df_vendas_filtrado["PED_OBS_INT"].isin([ "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"])]["PED_TOTAL"].sum()
+
     # Filtro para pedidos de distribuição com status F ou N
     filtro_distribuicao = df_vendas_filtrado["PED_OBS_INT"].isin([ "DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"]) & (df_vendas_filtrado["PED_STATUS"].isin(["F", "N"]))
     total_amc = df_vendas_filtrado[filtro_distribuicao]["PED_TOTAL"].sum()
 
-    return total_opd, total_amc
-
+    return float(total_opd), float(total_amc)
 
 # --- FUNÇÕES EXISTENTES (calcular_status, comparar_com_metas, gerar_grafico, calcular_dias_uteis) ---
 def calcular_status(realizado, metas, mes_referencia, feriados):
@@ -263,9 +265,18 @@ def gerar_tabela_diaria_empresa(df_vendas_filtrado):
 
     df = df_vendas_filtrado.copy()
 
-    df['Tipo Venda'] = np.where(
-        (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F'), 'OPD',
-        np.where(df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']), 'Distribuição', 'Outros')
+    # CÓDIGO NOVO E CORRIGIDO
+    # Condição para OPD: Observação é OPD E status é F
+    cond_opd = (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F')
+
+    # Condição para Distribuição: Observação é de distribuição E status é F ou N
+    cond_dist = df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']) & df['PED_STATUS'].isin(['F', 'N'])
+
+    # Aplicar as condições usando np.select para criar a coluna 'Tipo Venda'
+    df['Tipo Venda'] = np.select(
+        [cond_opd, cond_dist],    # Lista de condições a serem checadas
+        ['OPD', 'Distribuição'],  # Lista de valores correspondentes
+        default='Outros'          # Valor padrão se nenhuma condição for atendida
     )
     df_validos = df[df['Tipo Venda'].isin(['OPD', 'Distribuição'])]
 
@@ -304,9 +315,18 @@ def gerar_tabela_geral(df_vendas_filtrado):
 
     df = df_vendas_filtrado.copy()
 
-    df['Tipo Venda'] = np.where(
-        (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F'), 'OPD',
-        np.where(df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']), 'Distribuição', 'Outros')
+    # CÓDIGO NOVO E CORRIGIDO
+    # Condição para OPD: Observação é OPD E status é F
+    cond_opd = (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F')
+
+    # Condição para Distribuição: Observação é de distribuição E status é F ou N
+    cond_dist = df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']) & df['PED_STATUS'].isin(['F', 'N'])
+
+    # Aplicar as condições usando np.select para criar a coluna 'Tipo Venda'
+    df['Tipo Venda'] = np.select(
+        [cond_opd, cond_dist],    # Lista de condições a serem checadas
+        ['OPD', 'Distribuição'],  # Lista de valores correspondentes
+        default='Outros'          # Valor padrão se nenhuma condição for atendida
     )
     df_validos = df[df['Tipo Venda'].isin(['OPD', 'Distribuição'])]
 
@@ -343,9 +363,18 @@ def gerar_tabela_vendedor(df_vendas_filtrado):
 
     df = df_vendas_filtrado.copy()
 
-    df['Tipo Venda'] = np.where(
-        (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F'), 'OPD',
-        np.where(df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']), 'Distribuição', 'Outros')
+    # CÓDIGO NOVO E CORRIGIDO
+    # Condição para OPD: Observação é OPD E status é F
+    cond_opd = (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F')
+
+    # Condição para Distribuição: Observação é de distribuição E status é F ou N
+    cond_dist = df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']) & df['PED_STATUS'].isin(['F', 'N'])
+
+    # Aplicar as condições usando np.select para criar a coluna 'Tipo Venda'
+    df['Tipo Venda'] = np.select(
+        [cond_opd, cond_dist],    # Lista de condições a serem checadas
+        ['OPD', 'Distribuição'],  # Lista de valores correspondentes
+        default='Outros'          # Valor padrão se nenhuma condição for atendida
     )
     df_validos = df[df['Tipo Venda'].isin(['OPD', 'Distribuição'])]
 
@@ -392,9 +421,18 @@ def gerar_dados_ranking(df_vendas_filtrado):
         return pd.DataFrame()
 
     df = df_vendas_filtrado.copy()
-    df['Tipo Venda'] = np.where(
-        (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F'), 'OPD',
-        np.where(df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']), 'Distribuição', 'Outros')
+    # CÓDIGO NOVO E CORRIGIDO
+    # Condição para OPD: Observação é OPD E status é F
+    cond_opd = (df['PED_OBS_INT'] == 'OPD') & (df['PED_STATUS'] == 'F')
+
+    # Condição para Distribuição: Observação é de distribuição E status é F ou N
+    cond_dist = df['PED_OBS_INT'].isin(['DISTRIBICAO', 'DISTRIBUICAO', 'DISTRIBUIÇÃO', 'LOJA']) & df['PED_STATUS'].isin(['F', 'N'])
+
+    # Aplicar as condições usando np.select para criar a coluna 'Tipo Venda'
+    df['Tipo Venda'] = np.select(
+        [cond_opd, cond_dist],    # Lista de condições a serem checadas
+        ['OPD', 'Distribuição'],  # Lista de valores correspondentes
+        default='Outros'          # Valor padrão se nenhuma condição for atendida
     )
     df_validos = df[df['Tipo Venda'].isin(['OPD', 'Distribuição'])]
 
