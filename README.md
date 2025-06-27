@@ -83,4 +83,5 @@ Em caso de dúvidas ou sugestões, entre em contato:
 ## ⚠️ Observação
 
 **Nova Alternativa Distribuidora CRM** é um sistema interno e restrito a usuários autorizados. Todos os dados estão protegidos de acordo com as políticas de segurança e LGPD (Lei Geral de Proteção de Dados).
-**O sistema trabalha em uma base / formato criado de forma que funcione para diversas empresas com dados diferentes, caso queira implementar seus dados ao CRM, entre em contato**
+
+**O sistema trabalha em uma base / formato criado de forma que funcione para diversas empresas com dados diferentes, caso queira implementar seus dados ao CRM, entre em contato
