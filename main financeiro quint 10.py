@@ -66,13 +66,13 @@ def criar_painel_financeiro_avancado(
     bloco_total = f"""
         <div style="
             background-color: #f35202;
-            padding: 15px;
+            padding: 13px;
             border-radius: 10px;
             text-align: center;
             flex: 1;
             min-width: 150px;
         ">
-            <h4 style="color: #ffffff; margin: 5px; font-weight: 400;">💰 Valor Total</h4>
+            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">💰 Valor Total</h4>
             <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">
                 R$ {valor_total:,.2f}
             </p>
@@ -82,13 +82,13 @@ def criar_painel_financeiro_avancado(
     bloco_em_aberto = f"""
         <div style="
             background-color: #f35202;
-            padding: 15px;
+            padding: 13px;
             border-radius: 10px;
             text-align: center;
             flex: 1;
             min-width: 150px;
         ">
-            <h4 style="color: #ffffff; margin: 5px; font-weight: 400;">📂 Em Aberto</h4>
+            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">📂 Em Aberto</h4>
             <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">
                 R$ {valor_em_aberto:,.2f}
             </p>
@@ -98,13 +98,13 @@ def criar_painel_financeiro_avancado(
     bloco_pago = f"""
         <div style="
             background-color: #f35202;
-            padding: 15px;
+            padding: 13px;
             border-radius: 10px;
             text-align: center;
             flex: 1;
             min-width: 150px;
         ">
-            <h4 style="color: #ffffff; margin: 5px; font-weight: 400;">✅ Pago</h4>
+            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">✅ Pago</h4>
             <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">
                 R$ {valor_pago:,.2f}
             </p>
@@ -674,7 +674,7 @@ def gerar_dados_ranking(df_vendas_filtrado):
 st.sidebar.title("📊 Navegação")
 pagina_selecionada = st.sidebar.radio(
     "Escolha a visualização:",
-    ["Painel Principal", "Relatórios Detalhados", "Relatórios Financeiros"] # <-- ADICIONE AQUI
+    ["Painel Principal", "Relatórios Financeiros"] # <-- ADICIONE AQUI
 )
 
 st.title(f"📈 {pagina_selecionada}")
@@ -833,177 +833,179 @@ else:
     vendedor_selecionado_sess = st.session_state['vendedor_selecionado'] # Renomeado
 
     if pagina_selecionada == "Painel Principal":
-        if df_filtrado is None or df_filtrado.empty:
-            st.warning("Nenhum dado para exibir no Painel Principal com os filtros atuais.")
-        elif not comparacao:
-            st.warning("Metas não carregadas ou não encontradas para os filtros. O painel será exibido sem comparações.")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("📈 Vendas OPD", f"R$ {total_opd:,.2f}")
-            with col2:
-                st.metric("📊 Vendas Distribuição", f"R$ {total_amc:,.2f}")
-        else:
-            dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False, feriados=feriados_sess)
-            dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True, feriados=feriados_sess)
-            # Evita divisão por zero se não houver dias passados/restantes no mês (ex: primeiro/último dia)
-            dias_uteis_passados_calc = max(1, dias_uteis_passados)
-            dias_uteis_restantes_calc = max(1, dias_uteis_restantes)
+        tab1, tab2 = st.tabs(["📊 Visão Geral", "📋 Relatórios Detalhados"])
+        with tab1:
+            if df_filtrado is None or df_filtrado.empty:
+                st.warning("Nenhum dado para exibir no Painel Principal com os filtros atuais.")
+            elif not comparacao:
+                st.warning("Metas não carregadas ou não encontradas para os filtros. O painel será exibido sem comparações.")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("📈 Vendas OPD", f"R$ {total_opd:,.2f}")
+                with col2:
+                    st.metric("📊 Vendas Distribuição", f"R$ {total_amc:,.2f}")
+            else:
+                dias_uteis_passados = calcular_dias_uteis_passados(mes, incluir_hoje=False, feriados=feriados_sess)
+                dias_uteis_restantes = calcular_dias_uteis_restantes(mes, incluir_hoje=True, feriados=feriados_sess)
+                # Evita divisão por zero se não houver dias passados/restantes no mês (ex: primeiro/último dia)
+                dias_uteis_passados_calc = max(1, dias_uteis_passados)
+                dias_uteis_restantes_calc = max(1, dias_uteis_restantes)
 
 
-            def format_valor(valor):
-                return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                def format_valor(valor):
+                    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-            def calcular_tendencia(realizado, dias_passados, dias_futuros):
-                if dias_passados == 0: # Se não houve dias úteis passados no período filtrado
-                     media_diaria = 0
-                     tendencia_total = realizado # A tendência é apenas o que já foi realizado
-                else:
-                    media_diaria = realizado / dias_passados
-                    tendencia_total = realizado + (media_diaria * dias_futuros)
-                return tendencia_total, media_diaria
+                def calcular_tendencia(realizado, dias_passados, dias_futuros):
+                    if dias_passados == 0: # Se não houve dias úteis passados no período filtrado
+                        media_diaria = 0
+                        tendencia_total = realizado # A tendência é apenas o que já foi realizado
+                    else:
+                        media_diaria = realizado / dias_passados
+                        tendencia_total = realizado + (media_diaria * dias_futuros)
+                    return tendencia_total, media_diaria
 
-            if vendedor_selecionado_sess == "Todos":
-                soma_total = total_opd + total_amc
-                realizado_geral = soma_total
-                meta_geral = comparacao.get("OPD", {}).get("Meta Mensal", 0) + comparacao.get("AMC", {}).get("Meta Mensal", 0)
-                meta_desafio = comparacao.get("OPD", {}).get("Meta Desafio", 0) + comparacao.get("AMC", {}).get("Meta Desafio", 0)
-                super_meta = comparacao.get("AMC", {}).get("Super Meta", 0) + comparacao.get("OPD", {}).get("Meta Desafio", 0)
+                if vendedor_selecionado_sess == "Todos":
+                    soma_total = total_opd + total_amc
+                    realizado_geral = soma_total
+                    meta_geral = comparacao.get("OPD", {}).get("Meta Mensal", 0) + comparacao.get("AMC", {}).get("Meta Mensal", 0)
+                    meta_desafio = comparacao.get("OPD", {}).get("Meta Desafio", 0) + comparacao.get("AMC", {}).get("Meta Desafio", 0)
+                    super_meta = comparacao.get("AMC", {}).get("Super Meta", 0) + comparacao.get("OPD", {}).get("Meta Desafio", 0)
 
-                def gerar_bloco_meta(titulo, meta_valor):
-                    tendencia, media_diaria = calcular_tendencia(realizado_geral, dias_uteis_passados_calc, dias_uteis_restantes_calc)
-                    necessario_por_dia = max(0, (meta_valor - realizado_geral) / dias_uteis_restantes_calc) if dias_uteis_restantes_calc > 0 else (meta_valor - realizado_geral)
+                    def gerar_bloco_meta(titulo, meta_valor):
+                        tendencia, media_diaria = calcular_tendencia(realizado_geral, dias_uteis_passados_calc, dias_uteis_restantes_calc)
+                        necessario_por_dia = max(0, (meta_valor - realizado_geral) / dias_uteis_restantes_calc) if dias_uteis_restantes_calc > 0 else (meta_valor - realizado_geral)
 
-                    html = (
-                        f"<div style='background-color:#161616; padding:10px; border-radius:10px; width:33%; text-align:center; margin-bottom:10px;'>"
-                        f"<h4 style='color:#ffffff;'>{titulo}: {format_valor(meta_valor)}</h4>"
-                        f"<p style='color:#cccccc; margin:4px;'>📈 Tendência: {format_valor(tendencia)}</p>"
-                        f"<p style='color:#cccccc; margin:4px;'>📊 Média Diária Realizada: {format_valor(media_diaria)}</p>"
-                        f"<p style='color:#cccccc; margin:4px;'>🎯 Necessário/dia (restante): {format_valor(necessario_por_dia)}</p>"
-                        f"</div>"
-                    )
-                    return html
-
-                bloco_mensal = gerar_bloco_meta("Meta Mensal", meta_geral)
-                bloco_desafio = gerar_bloco_meta("Meta Desafio", meta_desafio)
-                bloco_super = gerar_bloco_meta("Super Meta", super_meta)
-
-                st.markdown(f"<div style='background-color:#161616; padding:10px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'><h4 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h4></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='display: flex; justify-content: space-between; gap: 10px; margin-top:0px;'>{bloco_mensal}{bloco_desafio}{bloco_super}</div>", unsafe_allow_html=True)
-
-            col1_chart, col2_chart = st.columns(2)
-            with col1_chart:
-                st.markdown(f"<div style='background-color:#f35202; padding:10px; border-radius:10px; text-align:center;'><h4 style='color:#ffff;'>📈 Vendas OPD: R$ {total_opd:,.2f}</h4></div>", unsafe_allow_html=True)
-                if "OPD" in comparacao and comparacao["OPD"]:
-                    st.plotly_chart(gerar_grafico("OPD", comparacao["OPD"], "Relação de OPD"), use_container_width=True)
-                else:
-                    st.info("Dados de OPD não disponíveis para o gráfico.")
-            with col2_chart:
-                st.markdown(f"<div style='background-color:#f35202; padding:10px; border-radius:10px; text-align:center;'><h4 style='color:#ffff;'>📊 Vendas Distribuição: R$ {total_amc:,.2f}</h4></div>", unsafe_allow_html=True)
-                if "AMC" in comparacao and comparacao["AMC"]:
-                    st.plotly_chart(gerar_grafico("AMC", comparacao["AMC"], "Relação de Distribuição"), use_container_width=True)
-                else:
-                    st.info("Dados de Distribuição (AMC) não disponíveis para o gráfico.")
-
-
-            st.markdown("<h2 style='text-align: center; margin-top: 30px;'>📢 Status Detalhado das Metas</h2>", unsafe_allow_html=True)
-            col1_m, col2_m = st.columns(2)
-
-            def exibir_metricas(coluna, titulo, metas_cat, realizado_cat):
-                with coluna:
-                    st.markdown(f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: 15px;'>{titulo}</div>", unsafe_allow_html=True)
-                    tendencia, media_diaria = calcular_tendencia(realizado_cat, dias_uteis_passados_calc, dias_uteis_restantes_calc)
-
-                    for nome_meta, valor_meta in metas_cat.items():
-                        if nome_meta == "Realizado" or valor_meta <= 0: continue
-
-                        necessario = max(0, (valor_meta - realizado_cat) / dias_uteis_restantes_calc) if dias_uteis_restantes_calc > 0 else (valor_meta - realizado_cat)
-                        delta_color = "normal" # Default to normal (red for negative delta in st.metric)
-                        diferenca_tendencia_meta = tendencia - valor_meta
-                        percentual_tendencia = (diferenca_tendencia_meta / valor_meta) * 100 if valor_meta > 0 else 0
-
-
-                        st.metric(
-                            label=f"🎯 {nome_meta}",
-                            value=format_valor(valor_meta),
-                            delta=f"Necessário vender por dia: {format_valor(necessario)}",
-                            delta_color="off" # Let the custom HTML handle colors based on trend
+                        html = (
+                            f"<div style='background-color:#161616; padding:10px; border-radius:10px; width:33%; text-align:center; margin-bottom:10px;'>"
+                            f"<h4 style='color:#ffffff;'>{titulo}: {format_valor(meta_valor)}</h4>"
+                            f"<p style='color:#cccccc; margin:4px;'>📈 Tendência: {format_valor(tendencia)}</p>"
+                            f"<p style='color:#cccccc; margin:4px;'>📊 Média Diária Realizada: {format_valor(media_diaria)}</p>"
+                            f"<p style='color:#cccccc; margin:4px;'>🎯 Necessário/dia (restante): {format_valor(necessario_por_dia)}</p>"
+                            f"</div>"
                         )
+                        return html
 
-                        if tendencia >= valor_meta:
-                            cor_borda = "#28a745" # Verde
-                            sinal = "+"
-                            texto_status = f"📈 Tendência positiva para <u>{nome_meta}</u>"
-                            texto_rodape = f"Projeção de ultrapassar a meta em {sinal}{format_valor(abs(diferenca_tendencia_meta))}."
-                        else:
-                            cor_borda = "#dc3545" # Vermelho
-                            sinal = "-"
-                            texto_status = f"📉 Risco de não atingir <u>{nome_meta}</u>"
-                            texto_rodape = f"Projeção de ficar abaixo da meta em {sinal}{format_valor(abs(diferenca_tendencia_meta))}."
+                    bloco_mensal = gerar_bloco_meta("Meta Mensal", meta_geral)
+                    bloco_desafio = gerar_bloco_meta("Meta Desafio", meta_desafio)
+                    bloco_super = gerar_bloco_meta("Super Meta", super_meta)
 
-                        texto_html = f"""
-                        <div style="background-color:#161616; padding:16px; border-radius:12px; margin-bottom:15px;
-                                    box-shadow:0 2px 6px rgba(0,0,0,0.1); border-left:6px solid {cor_borda};">
-                            <div style="font-size:16px; font-weight:bold;">{texto_status}</div>
-                            <div style="font-size:22px; font-weight:bold; color:{cor_borda}; margin-top:6px;">
-                                {sinal}{format_valor(abs(diferenca_tendencia_meta))} ({sinal}{abs(percentual_tendencia):.1f}%)
+                    st.markdown(f"<div style='background-color:#161616; padding:20px; border-radius:10px; text-align:center; margin-top:10px; margin-bottom:10px;'><h3 style='color:#ffffff;'>💰 Total Geral da Empresa: {format_valor(soma_total)}</h3></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='display: flex; justify-content: space-between; gap: 10px; margin-top:0px;'>{bloco_mensal}{bloco_desafio}{bloco_super}</div>", unsafe_allow_html=True)
+
+                col1_chart, col2_chart = st.columns(2)
+                with col1_chart:
+                    st.markdown(f"<div style='background-color:#f35202; padding:10px; border-radius:10px; text-align:center;'><h4 style='color:#ffff;'>📈 Vendas OPD: R$ {total_opd:,.2f}</h4></div>", unsafe_allow_html=True)
+                    if "OPD" in comparacao and comparacao["OPD"]:
+                        st.plotly_chart(gerar_grafico("OPD", comparacao["OPD"], "Relação de OPD"), use_container_width=True)
+                    else:
+                        st.info("Dados de OPD não disponíveis para o gráfico.")
+                with col2_chart:
+                    st.markdown(f"<div style='background-color:#f35202; padding:10px; border-radius:10px; text-align:center;'><h4 style='color:#ffff;'>📊 Vendas Distribuição: R$ {total_amc:,.2f}</h4></div>", unsafe_allow_html=True)
+                    if "AMC" in comparacao and comparacao["AMC"]:
+                        st.plotly_chart(gerar_grafico("AMC", comparacao["AMC"], "Relação de Distribuição"), use_container_width=True)
+                    else:
+                        st.info("Dados de Distribuição (AMC) não disponíveis para o gráfico.")
+
+
+                st.markdown("<h2 style='text-align: center; margin-top: 30px;'>📢 Status Detalhado das Metas</h2>", unsafe_allow_html=True)
+                col1_m, col2_m = st.columns(2)
+
+                def exibir_metricas(coluna, titulo, metas_cat, realizado_cat):
+                    with coluna:
+                        st.markdown(f"<div style='text-align: center; font-size: 25px; font-weight: bold; margin-bottom: 15px;'>{titulo}</div>", unsafe_allow_html=True)
+                        tendencia, media_diaria = calcular_tendencia(realizado_cat, dias_uteis_passados_calc, dias_uteis_restantes_calc)
+
+                        for nome_meta, valor_meta in metas_cat.items():
+                            if nome_meta == "Realizado" or valor_meta <= 0: continue
+
+                            necessario = max(0, (valor_meta - realizado_cat) / dias_uteis_restantes_calc) if dias_uteis_restantes_calc > 0 else (valor_meta - realizado_cat)
+                            delta_color = "normal" # Default to normal (red for negative delta in st.metric)
+                            diferenca_tendencia_meta = tendencia - valor_meta
+                            percentual_tendencia = (diferenca_tendencia_meta / valor_meta) * 100 if valor_meta > 0 else 0
+
+
+                            st.metric(
+                                label=f"🎯 {nome_meta}",
+                                value=format_valor(valor_meta),
+                                delta=f"Necessário vender por dia: {format_valor(necessario)}",
+                                delta_color="off" # Let the custom HTML handle colors based on trend
+                            )
+
+                            if tendencia >= valor_meta:
+                                cor_borda = "#28a745" # Verde
+                                sinal = "+"
+                                texto_status = f"📈 Tendência positiva para <u>{nome_meta}</u>"
+                                texto_rodape = f"Projeção de ultrapassar a meta em {sinal}{format_valor(abs(diferenca_tendencia_meta))}."
+                            else:
+                                cor_borda = "#dc3545" # Vermelho
+                                sinal = "-"
+                                texto_status = f"📉 Risco de não atingir <u>{nome_meta}</u>"
+                                texto_rodape = f"Projeção de ficar abaixo da meta em {sinal}{format_valor(abs(diferenca_tendencia_meta))}."
+
+                            texto_html = f"""
+                            <div style="background-color:#161616; padding:16px; border-radius:12px; margin-bottom:15px;
+                                        box-shadow:0 2px 6px rgba(0,0,0,0.1); border-left:6px solid {cor_borda};">
+                                <div style="font-size:16px; font-weight:bold;">{texto_status}</div>
+                                <div style="font-size:22px; font-weight:bold; color:{cor_borda}; margin-top:6px;">
+                                    {sinal}{format_valor(abs(diferenca_tendencia_meta))} ({sinal}{abs(percentual_tendencia):.1f}%)
+                                </div>
+                                <div style="font-size:14px; color:#cccccc;">{texto_rodape}</div>
+                                <div style="font-size:14px; color:#cccccc; margin-top:5px;">
+                                    <i>Tendência Total: {format_valor(tendencia)} | Média Diária Realizada: {format_valor(media_diaria)}</i>
+                                </div>
                             </div>
-                            <div style="font-size:14px; color:#cccccc;">{texto_rodape}</div>
-                            <div style="font-size:14px; color:#cccccc; margin-top:5px;">
-                                <i>Tendência Total: {format_valor(tendencia)} | Média Diária Realizada: {format_valor(media_diaria)}</i>
-                            </div>
-                        </div>
-                        """
-                        st.markdown(texto_html, unsafe_allow_html=True)
+                            """
+                            st.markdown(texto_html, unsafe_allow_html=True)
+                            st.markdown("---")
+
+                if "OPD" in comparacao and comparacao["OPD"]:
+                    metas_opd_validas = {k: v for k, v in comparacao["OPD"].items() if v > 0 and k != "Realizado"}
+                    exibir_metricas(col1_m, "📦 OPD", metas_opd_validas, total_opd)
+                else:
+                    with col1_m:
+                        st.info("Dados de metas OPD não disponíveis.")
+
+                if "AMC" in comparacao and comparacao["AMC"]:
+                    metas_amc_validas = {k: v for k, v in comparacao["AMC"].items() if v > 0 and k != "Realizado"}
+                    exibir_metricas(col2_m, "🚚 Distribuição", metas_amc_validas, total_amc)
+                else:
+                    with col2_m:
+                        st.info("Dados de metas Distribuição (AMC) não disponíveis.")
+
+        with tab2:
+            if df_filtrado is None or df_filtrado.empty:
+                st.warning("Nenhum dado para exibir nos Relatórios com os filtros atuais.")
+            else:
+                if vendedor_selecionado_sess == "Todos":
+                    st.subheader("📋 Visão Geral da Empresa")
+                    tipo_visao_geral = st.radio(
+                        "Escolha como visualizar os dados gerais:",
+                        ["Resumo por Vendedor", "Resumo Dia a Dia (Empresa)"],
+                        horizontal=True
+                    )
+                    if tipo_visao_geral == "Resumo por Vendedor":
+                        st.markdown("##### Total de Vendas por Vendedor")
+                        tabela_geral_df = gerar_tabela_geral(df_filtrado)
+                        st.dataframe(tabela_geral_df, use_container_width=True)
+                    elif tipo_visao_geral == "Resumo Dia a Dia (Empresa)":
+                        st.markdown("##### Vendas Resumidas da Empresa (Dia a Dia)")
+                        tabela_resumo_dia_df = gerar_tabela_diaria_empresa(df_filtrado)
+                        st.dataframe(tabela_resumo_dia_df, use_container_width=True)
+                else:
+                    st.subheader(f"📋 Detalhe de Vendas - {vendedor_selecionado_sess}")
+                    tabela_detalhada, totais_vendedor = gerar_tabela_vendedor(df_filtrado)
+                    if not tabela_detalhada.empty:
+                        st.dataframe(tabela_detalhada, use_container_width=True)
                         st.markdown("---")
+                        st.subheader("Resumo do Vendedor no Período")
+                        col1_vend, col2_vend, col3_vend = st.columns(3)
+                        col1_vend.metric("🔹 Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
+                        col2_vend.metric("🔸 Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
+                        col3_vend.metric("💰 Total Geral Vendedor", f"R$ {totais_vendedor.get('Total', 0):,.2f}")
 
-            if "OPD" in comparacao and comparacao["OPD"]:
-                metas_opd_validas = {k: v for k, v in comparacao["OPD"].items() if v > 0 and k != "Realizado"}
-                exibir_metricas(col1_m, "📦 OPD", metas_opd_validas, total_opd)
-            else:
-                with col1_m:
-                    st.info("Dados de metas OPD não disponíveis.")
-
-            if "AMC" in comparacao and comparacao["AMC"]:
-                metas_amc_validas = {k: v for k, v in comparacao["AMC"].items() if v > 0 and k != "Realizado"}
-                exibir_metricas(col2_m, "🚚 Distribuição", metas_amc_validas, total_amc)
-            else:
-                with col2_m:
-                    st.info("Dados de metas Distribuição (AMC) não disponíveis.")
-
-    elif pagina_selecionada == "Relatórios Detalhados":
-        if df_filtrado is None or df_filtrado.empty:
-            st.warning("Nenhum dado para exibir nos Relatórios com os filtros atuais.")
-        else:
-            if vendedor_selecionado_sess == "Todos":
-                st.subheader("📋 Visão Geral da Empresa")
-                tipo_visao_geral = st.radio(
-                    "Escolha como visualizar os dados gerais:",
-                    ["Resumo por Vendedor", "Resumo Dia a Dia (Empresa)"],
-                    horizontal=True
-                )
-                if tipo_visao_geral == "Resumo por Vendedor":
-                    st.markdown("##### Total de Vendas por Vendedor")
-                    tabela_geral_df = gerar_tabela_geral(df_filtrado)
-                    st.dataframe(tabela_geral_df, use_container_width=True)
-                elif tipo_visao_geral == "Resumo Dia a Dia (Empresa)":
-                    st.markdown("##### Vendas Resumidas da Empresa (Dia a Dia)")
-                    tabela_resumo_dia_df = gerar_tabela_diaria_empresa(df_filtrado)
-                    st.dataframe(tabela_resumo_dia_df, use_container_width=True)
-            else:
-                st.subheader(f"📋 Detalhe de Vendas - {vendedor_selecionado_sess}")
-                tabela_detalhada, totais_vendedor = gerar_tabela_vendedor(df_filtrado)
-                if not tabela_detalhada.empty:
-                    st.dataframe(tabela_detalhada, use_container_width=True)
-                    st.markdown("---")
-                    st.subheader("Resumo do Vendedor no Período")
-                    col1_vend, col2_vend, col3_vend = st.columns(3)
-                    col1_vend.metric("🔹 Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
-                    col2_vend.metric("🔸 Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
-                    col3_vend.metric("💰 Total Geral Vendedor", f"R$ {totais_vendedor.get('Total', 0):,.2f}")
-
-                            # --- Ranking abaixo do relatório ---
-        st.markdown("---")
-        st.subheader("🏆 Ranking de Vendedores no Período")
+                                # --- Ranking abaixo do relatório ---
+            st.markdown("---")
+            st.subheader("🏆 Ranking de Vendedores no Período")
         
         df_ranking = gerar_dados_ranking(df_filtrado)
         
