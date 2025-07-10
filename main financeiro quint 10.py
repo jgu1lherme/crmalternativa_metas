@@ -718,14 +718,20 @@ else: # Período Personalizado
         st.sidebar.error("⚠️ Selecione uma data inicial e uma data final!")
         st.stop()
 
-try:
-    df_vendas_bruto = pd.read_excel(uploaded_file)
-    vendedores_unicos_stripped = sorted(list(df_vendas_bruto["VEN_NOME"].dropna().str.strip().unique()))
-    vendedores = ["Todos"] + vendedores_unicos_stripped
-    vendedor_selecionado = st.sidebar.selectbox("👤 Vendedor", vendedores)
-except FileNotFoundError:
-    st.error(f"❌ Erro: Arquivo '{uploaded_file}' não encontrado. Verifique o caminho.")
-    st.stop()
+vendedor_selecionado = "Todos"
+
+if pagina_selecionada != "Relatórios Financeiros":
+    try:
+        df_vendas_bruto = pd.read_excel(uploaded_file)
+        vendedores_unicos_stripped = sorted(list(df_vendas_bruto["VEN_NOME"].dropna().str.strip().unique()))
+        vendedores = ["Todos"] + vendedores_unicos_stripped
+        vendedor_selecionado = st.sidebar.selectbox("👤 Vendedor", vendedores)
+    except FileNotFoundError:
+        st.error(f"❌ Erro: Arquivo '{uploaded_file}' não encontrado. Verifique o caminho.")
+        st.stop()
+
+vendedor_selecionado_upper = vendedor_selecionado.upper()
+
 
 com_cdp = st.sidebar.checkbox("Incluir vendas da Casa do Pedreiro", value=True)
 
@@ -1045,48 +1051,52 @@ else:
     # NOVA PÁGINA: RELATÓRIOS FINANCEIROS
     # --------------------------------------------------------------------------------
     elif pagina_selecionada == "Relatórios Financeiros":
-        
-        # st.markdown("## 💰 Painel Financeiro")
-        # st.markdown("---")
 
         caminho_financeiro = "resources/FINANCEIRO.xlsx"
         df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
 
         if df_receber is not None and df_pagar is not None:
-            
-            # --- FILTROS ESPECÍFICOS PARA O FINANCEIRO ---
-            # Usaremos os filtros de data já existentes na sidebar, mas adicionaremos filtros de cliente/fornecedor aqui.
-            
-            st.sidebar.header("Filtros Financeiros")
-            
-            # Filtro de Status
-            lista_status = pd.concat([df_receber['Status'], df_pagar['Status']]).dropna().unique().tolist()
-            status_selecionados = st.sidebar.multiselect("Filtrar por Status", options=lista_status, default=lista_status)
 
-            # Filtro de Cliente/Fornecedor
-            lista_entidades = pd.concat([df_receber['Cliente'], df_pagar['Fornecedor']]).dropna().unique().tolist()
-            entidades_selecionadas = st.sidebar.multiselect("Filtrar por Cliente/Fornecedor", options=lista_entidades, default=lista_entidades)
+            # --- FILTROS ESPECÍFICOS PARA O FINANCEIRO ---
+            st.sidebar.header("Filtros Financeiros")
+
+            # Unir todas as entidades únicas (Cliente + Fornecedor)
+            entidades_unicas = sorted(
+                pd.concat([df_receber['Cliente'], df_pagar['Fornecedor']])
+                .dropna()
+                .unique()
+            )
+
+            entidade_escolhida = st.sidebar.selectbox(
+                "Selecionar Cliente/Fornecedor",
+                options=["Todos"] + entidades_unicas
+            )
 
             # Aplicando filtros
             df_receber_filtrado = df_receber[
                 (df_receber['Data Vencimento'].dt.date >= data_inicial) &
-                (df_receber['Data Vencimento'].dt.date <= data_final) &
-                (df_receber['Status'].isin(status_selecionados)) &
-                (df_receber['Cliente'].isin(entidades_selecionadas))
+                (df_receber['Data Vencimento'].dt.date <= data_final)
             ]
-            
+
+            if entidade_escolhida != "Todos":
+                df_receber_filtrado = df_receber_filtrado[
+                    df_receber_filtrado['Cliente'] == entidade_escolhida
+                ]
+
             df_pagar_filtrado = df_pagar[
                 (df_pagar['Data Vencimento'].dt.date >= data_inicial) &
-                (df_pagar['Data Vencimento'].dt.date <= data_final) &
-                (df_pagar['Status'].isin(status_selecionados)) &
-                (df_pagar['Fornecedor'].isin(entidades_selecionadas))
+                (df_pagar['Data Vencimento'].dt.date <= data_final)
             ]
+
+            if entidade_escolhida != "Todos":
+                df_pagar_filtrado = df_pagar_filtrado[
+                    df_pagar_filtrado['Fornecedor'] == entidade_escolhida
+                ]
 
             # --- ABAS PARA VISUALIZAÇÃO ---
             tab1, tab2 = st.tabs(["📊 Contas a Receber", "💸 Contas a Pagar"])
 
             with tab1:
-                # NOVO CÓDIGO DENTRO DE "with tab1:"
                 criar_painel_financeiro_avancado(
                     "📊 Visão Geral de Contas a Receber",
                     df_receber_filtrado,
@@ -1094,10 +1104,9 @@ else:
                     coluna_status='Status',
                     coluna_entidade='Cliente',
                     coluna_vencimento='Data Vencimento'
-)
+                )
 
             with tab2:
-                # NOVO CÓDIGO DENTRO DE "with tab2:"
                 criar_painel_financeiro_avancado(
                     "💸 Visão Geral de Contas a Pagar",
                     df_pagar_filtrado,
@@ -1106,6 +1115,6 @@ else:
                     coluna_entidade='Fornecedor',
                     coluna_vencimento='Data Vencimento'
                 )
-                
+            
         else:
             st.warning("⚠️ Não foi possível carregar os dados financeiros. Verifique o arquivo e as abas.")
