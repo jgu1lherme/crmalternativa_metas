@@ -18,12 +18,75 @@ def carregar_planilha_metas(caminho_arquivo, aba=0):
     df.rename(columns={df.columns[0]: "Categoria"}, inplace=True)
     return df
 
-# --------------------------------------------------------------------------------
-# VERSÃO ATUALIZADA DA FUNÇÃO DE PAINEL FINANCEIRO (SIMPLIFICADA)
-# --------------------------------------------------------------------------------
-# --------------------------------------------------------------------------------
-# VERSÃO FINAL DA FUNÇÃO DE PAINEL FINANCEIRO (100% BASEADA NO STATUS DA PLANILHA)
-# --------------------------------------------------------------------------------
+def gerar_analise_abc_clientes(df_vendas, com_cdp=True, nomes_cdp=None):
+    """
+    Calcula a Curva ABC de clientes com base no valor total de vendas.
+    
+    Parâmetros:
+    - df_vendas: DataFrame com vendas.
+    - com_cdp: Booleano, se True inclui vendas da Casa do Pedreiro.
+    - nomes_cdp: lista com os nomes dos clientes da Casa do Pedreiro para filtro.
+    """
+
+    if df_vendas is None or df_vendas.empty:
+        return None
+    
+    # Aplicar filtro para Casa do Pedreiro, se necessário
+    if not com_cdp and nomes_cdp is not None:
+        df_vendas = df_vendas[~df_vendas["CLI_RAZ"].isin(nomes_cdp)]
+        if df_vendas.empty:
+            # Opcional: aqui pode emitir um aviso, mas isso depende do contexto de uso
+            print("⚠️ Nenhuma venda encontrada após filtro 'Casa do Pedreiro'.")
+
+    # Agrupar vendas por cliente
+    vendas_por_cliente = df_vendas.groupby('CLI_RAZ')['PED_TOTAL'].sum().sort_values(ascending=False).reset_index()
+    vendas_por_cliente.rename(columns={'PED_TOTAL': 'Valor Total Vendas'}, inplace=True)
+    
+    # Calcular porcentagem de participação e acumulada
+    vendas_por_cliente['% Participação'] = (vendas_por_cliente['Valor Total Vendas'] / vendas_por_cliente['Valor Total Vendas'].sum())
+    vendas_por_cliente['% Acumulada'] = vendas_por_cliente['% Participação'].cumsum()
+
+    # Classificar clientes em A, B e C
+    def classificar_abc(perc_acumulado):
+        if perc_acumulado <= 0.8:
+            return 'A'  # 80% do faturamento
+        elif perc_acumulado <= 0.95:
+            return 'B'  # Próximos 15% do faturamento
+        else:
+            return 'C'  # Últimos 5% do faturamento
+
+    vendas_por_cliente['Classe'] = vendas_por_cliente['% Acumulada'].apply(classificar_abc)
+    
+    return vendas_por_cliente
+
+
+def preparar_dados_fluxo_caixa(df_receber, df_pagar, saldo_inicial, data_inicio_filtro, data_fim_filtro):
+    """
+    Consolida contas a pagar e receber para criar uma projeção de fluxo de caixa diário.
+    """
+    # Filtrar apenas contas 'EM ABERTO' que afetam o futuro
+    receber_futuro = df_receber[df_receber['Status'] == 'EM ABERTO'].copy()
+    pagar_futuro = df_pagar[df_pagar['Status'] == 'EM ABERTO'].copy()
+
+    # Agrupar por dia de vencimento
+    entradas = receber_futuro.groupby('Data Vencimento')['Valor'].sum().rename('Entradas')
+    saidas = pagar_futuro.groupby('Data Vencimento')['Valor'].sum().rename('Saídas')
+
+    # Unir as duas séries em um único DataFrame
+    fluxo_df = pd.concat([entradas, saidas], axis=1).fillna(0)
+    
+    # Criar um índice de datas contínuo para não pular dias
+    idx_datas = pd.date_range(start=data_inicio_filtro, end=data_fim_filtro, freq='D')
+    fluxo_df = fluxo_df.reindex(idx_datas, fill_value=0)
+
+    # Calcular o fluxo líquido diário
+    fluxo_df['Fluxo Líquido'] = fluxo_df['Entradas'] - fluxo_df['Saídas']
+    
+    # Calcular o saldo acumulado
+    fluxo_df['Saldo Acumulado'] = fluxo_df['Fluxo Líquido'].cumsum() + saldo_inicial
+    
+    return fluxo_df.reset_index().rename(columns={'index': 'Data'})
+
 def criar_painel_financeiro_avancado(
     titulo,
     df_filtrado,
@@ -31,13 +94,14 @@ def criar_painel_financeiro_avancado(
     coluna_status,
     coluna_entidade,
     coluna_vencimento,
+    coluna_inadimplencia=None # <-- NOVO PARÂMETRO OPCIONAL
 ):
     """
     Cria e exibe um painel financeiro avançado,
-    exibindo KPIs de Total, Em Aberto e Pago.
+    com lógica opcional para exibir um gráfico de inadimplência.
     """
-
     import streamlit as st
+    import plotly.express as px
 
     if df_filtrado.empty:
         st.info(f"Não há dados de '{titulo}' para exibir com os filtros selecionados.")
@@ -64,104 +128,63 @@ def criar_painel_financeiro_avancado(
 
     # --- 3. BLOCOS DOS KPIs ---
     bloco_total = f"""
-        <div style="
-            background-color: #f35202;
-            padding: 13px;
-            border-radius: 10px;
-            text-align: center;
-            flex: 1;
-            min-width: 150px;
-        ">
-            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">💰 Valor Total</h4>
-            <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">
-                R$ {valor_total:,.2f}
-            </p>
+        <div style="background-color: #f35202; padding: 13px; border-radius: 10px; text-align: center; flex: 1; min-width: 150px;">
+            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">💰 Total do Mês</h4>
+            <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">R$ {valor_total:,.2f}</p>
         </div>
     """
-
     bloco_em_aberto = f"""
-        <div style="
-            background-color: #f35202;
-            padding: 13px;
-            border-radius: 10px;
-            text-align: center;
-            flex: 1;
-            min-width: 150px;
-        ">
-            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">📂 Em Aberto</h4>
-            <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">
-                R$ {valor_em_aberto:,.2f}
-            </p>
+        <div style="background-color: #f35202; padding: 13px; border-radius: 10px; text-align: center; flex: 1; min-width: 150px;">
+            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">📂 A Receber</h4>
+            <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">R$ {valor_em_aberto:,.2f}</p>
         </div>
     """
-
     bloco_pago = f"""
-        <div style="
-            background-color: #f35202;
-            padding: 13px;
-            border-radius: 10px;
-            text-align: center;
-            flex: 1;
-            min-width: 150px;
-        ">
-            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">✅ Pago</h4>
-            <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">
-                R$ {valor_pago:,.2f}
-            </p>
+        <div style="background-color: #f35202; padding: 13px; border-radius: 10px; text-align: center; flex: 1; min-width: 150px;">
+            <h4 style="color: #ffffff; margin: 3px; font-weight: 400;">✅ Recebido</h4>
+            <p style="color: #ffffff; font-size: 1.6rem; margin: 0; font-weight: 700;">R$ {valor_pago:,.2f}</p>
         </div>
     """
-
     st.markdown(f"""
-        <div style="
-            display: flex;
-            gap: 10px;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        ">
+        <div style="display: flex; gap: 10px; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap;">
             {bloco_total}
             {bloco_em_aberto}
             {bloco_pago}
         </div>
     """, unsafe_allow_html=True)
     
-    # Layout para próximos elementos
+    # Layout para os gráficos
     col1, col2 = st.columns(2)
 
-
-    # --- 3. GRÁFICO DE ROSCA (DONUT) (JÁ ESTÁ CORRETO) ---
+    # --- GRÁFICO DE ROSCA POR STATUS ---
     with col1:
         st.markdown("##### 📊 Composição por Status")
         df_status = df_filtrado.groupby(coluna_status)[coluna_valor].sum().reset_index()
         if not df_status.empty:
+            # 👇 LINHA DO GRÁFICO DE ROSCA CORRIGIDA E COMPLETA 👇
             fig_donut = px.pie(
                 df_status,
                 names=coluna_status,
                 values=coluna_valor,
                 hole=0.4,
                 color=coluna_status,
-                color_discrete_map={'PAGO': '#f35202' , 'EM ABERTO': '#313334'}
+                color_discrete_map={'PAGO': '#f35202', 'EM ABERTO': '#313334'}
             )
             fig_donut.update_layout(showlegend=True, height=350, margin=dict(l=10, r=10, t=40, b=10))
             st.plotly_chart(fig_donut, use_container_width=True)
         else:
             st.info("Sem dados de status para exibir.")
 
+    # --- GRÁFICO TOP 5 EM ABERTO ---
     with col2:
         st.markdown(f"##### 🏆 Top 5 {coluna_entidade.capitalize()}s - Em Aberto")
         df_em_aberto = df_filtrado[df_filtrado[coluna_status] == 'EM ABERTO']
         
         if not df_em_aberto.empty:
             top_5 = df_em_aberto.groupby(coluna_entidade)[coluna_valor].sum().nlargest(5).sort_values(ascending=True).reset_index()
-
-            # Remover prefixo antes do " - " e criar nome limpo
             top_5['nome_limpo'] = top_5[coluna_entidade].apply(lambda x: x.split(" - ", 1)[-1].strip())
-
-            # Abreviar nomes longos
             limite = 25
-            top_5['nome_resumido'] = top_5['nome_limpo'].apply(
-                lambda x: x if len(x) <= limite else x[:limite] + '...'
-            )
+            top_5['nome_resumido'] = top_5['nome_limpo'].apply(lambda x: x if len(x) <= limite else x[:limite] + '...')
 
             fig_top5 = px.bar(
                 top_5,
@@ -186,24 +209,80 @@ def criar_painel_financeiro_avancado(
         else:
             st.info("Não há contas em aberto para exibir no Top 5.")
 
+    if coluna_inadimplencia and coluna_inadimplencia in df_filtrado.columns:
+        st.markdown("---")
+        st.markdown(f"##### 🚨 Análise de Inadimplência")
+        
+        df_inadimplentes = df_filtrado[df_filtrado[coluna_inadimplencia] == 'Inadimplente'].copy()
+        
+        if not df_inadimplentes.empty:
+            
+            # --- KPIs Específicos de Inadimplência ---
+            total_inadimplente = df_inadimplentes[coluna_valor].sum()
+            num_clientes_inadimplentes = df_inadimplentes[coluna_entidade].nunique()
+            media_inadimplencia = total_inadimplente / num_clientes_inadimplentes if num_clientes_inadimplentes > 0 else 0
 
-#     st.markdown("---")
-#     st.markdown("#### Detalhamento Completo")
-# # ... final da função
-#     st.dataframe(df_filtrado.style.format({
-#         coluna_valor: "R$ {:,.2f}",
-#         "Data Emissao": "{:%d/%m/%Y}",
-#         coluna_vencimento: "{:%d/%m/%Y}"
-#     }, na_rep="-"), use_container_width=True)
+            kpi1, kpi2, kpi3 = st.columns(3)
+            with kpi1:
+                st.metric("Valor Total Inadimplente", f"R$ {total_inadimplente:,.2f}")
+            with kpi2:
+                st.metric("Nº de Clientes Inadimplentes", num_clientes_inadimplentes)
+            with kpi3:
+                st.metric("Ticket Médio da Inadimplência", f"R$ {media_inadimplencia:,.2f}")
 
+            st.markdown("---")
+
+            # --- Gráfico de Barras Aprimorado: Top 10 ---
+            st.markdown(f"##### 🏆 Top 10 Clientes Inadimplentes")
+            top_10_inadimplentes = df_inadimplentes.groupby(coluna_entidade)[coluna_valor].sum().nlargest(10).sort_values(ascending=True).reset_index()
+
+            fig_top_inadimplencia = px.bar(
+                top_10_inadimplentes,
+                y=coluna_entidade,
+                x=coluna_valor,
+                orientation='h',
+                text_auto=True,
+                height=400
+            )
+            fig_top_inadimplencia.update_traces(
+                marker_color='#f35202', # Vermelho de alerta
+                texttemplate='R$ %{x:,.2f}'
+            )
+            fig_top_inadimplencia.update_layout(
+                yaxis_title=None,
+                xaxis_title="Valor Inadimplente (R$)",
+                margin=dict(l=10, r=10, t=30, b=10)
+            )
+            st.plotly_chart(fig_top_inadimplencia, use_container_width=True)
+
+            # --- Tabela Expansível com Todos os Detalhes ---
+            with st.expander("Ver lista completa de todos os clientes inadimplentes"):
+                # Preparar colunas para exibição na tabela
+                colunas_exibir = [
+                    coluna_entidade,
+                    coluna_valor,
+                    'Data Vencimento', # Adicionado para contexto
+                    'Data Emissao'
+                ]
+                df_inadimplentes_tabela = df_inadimplentes[colunas_exibir].sort_values(by=coluna_valor, ascending=False)
+                
+                st.dataframe(df_inadimplentes_tabela.style.format({
+                    coluna_valor: "R$ {:,.2f}",
+                    "Data Vencimento": "{:%d/%m/%Y}",
+                    "Data Emissao": "{:%d/%m/%Y}"
+                }, na_rep="-"), use_container_width=True)
+
+        else:
+            st.success("✅ Ótima notícia! Não há clientes inadimplentes no período selecionado.")
 def carregar_dados_financeiros(caminho_arquivo):
     """
-    Carrega as abas 'Contas a Receber' e 'Contas a Pagar' de uma planilha Excel.
+    Carrega as abas 'Receber' e 'Pagar' de uma planilha Excel,
+    incluindo a nova coluna 'Inadimplência'.
     """
     try:
         # Carrega as duas abas em DataFrames separados
-        df_receber = pd.read_excel(caminho_arquivo, sheet_name="receber")
-        df_pagar = pd.read_excel(caminho_arquivo, sheet_name="pagar")
+        df_receber = pd.read_excel(caminho_arquivo, sheet_name="Receber")
+        df_pagar = pd.read_excel(caminho_arquivo, sheet_name="Pagar")
 
         # --- Padroniza as colunas de 'Contas a Receber' ---
         df_receber['Data Emissao'] = pd.to_datetime(df_receber['Data Emissao'], errors='coerce')
@@ -211,7 +290,16 @@ def carregar_dados_financeiros(caminho_arquivo):
         df_receber['Valor'] = pd.to_numeric(df_receber['Valor'], errors='coerce').fillna(0)
         df_receber['Cliente'] = df_receber['Cliente'].str.strip()
         df_receber['Status'] = df_receber['Status'].str.strip()
-
+        
+        # --- ADIÇÃO PARA LER A NOVA COLUNA ---
+        # Verifica se a coluna 'Inadimplência' existe para evitar erros
+        if 'Inadimplência' in df_receber.columns:
+            df_receber['Inadimplência'] = df_receber['Inadimplência'].str.strip()
+        else:
+            # Se não existir, cria a coluna com um valor padrão para não quebrar o app
+            df_receber['Inadimplência'] = "N/A"
+            st.warning("Atenção: A coluna 'Inadimplência' não foi encontrada na aba 'Receber'.")
+        # --- FIM DA ADIÇÃO ---
 
         # --- Padroniza as colunas de 'Contas a Pagar' ---
         df_pagar['Data Emissao'] = pd.to_datetime(df_pagar['Data Emissao'], errors='coerce')
@@ -220,7 +308,6 @@ def carregar_dados_financeiros(caminho_arquivo):
         df_pagar['Fornecedor'] = df_pagar['Fornecedor'].str.strip()
         df_pagar['Status'] = df_pagar['Status'].str.strip()
 
-
         return df_receber, df_pagar
 
     except FileNotFoundError:
@@ -228,7 +315,7 @@ def carregar_dados_financeiros(caminho_arquivo):
         return None, None
     except ValueError as e:
         if "Worksheet" in str(e) and "not found" in str(e):
-             st.error(f"❌ Erro: Uma das abas ('Contas a Receber' ou 'Contas a Pagar') não foi encontrada no arquivo. Verifique o nome das abas.")
+             st.error(f"❌ Erro: Uma das abas ('Receber' ou 'Pagar') não foi encontrada no arquivo. Verifique o nome das abas.")
              return None, None
         else:
             st.error(f"❌ Erro ao ler o arquivo financeiro: {e}")
@@ -674,7 +761,7 @@ def gerar_dados_ranking(df_vendas_filtrado):
 st.sidebar.title("📊 Navegação")
 pagina_selecionada = st.sidebar.radio(
     "Escolha a visualização:",
-    ["Painel Principal", "Relatórios Financeiros"] # <-- ADICIONE AQUI
+    ["Painel Principal", "Relatórios Financeiros", "Análise de Resultados (DRE)"] # <-- ADICIONE AQUI
 )
 
 st.title(f"📈 {pagina_selecionada}")
@@ -982,69 +1069,98 @@ else:
             if df_filtrado is None or df_filtrado.empty:
                 st.warning("Nenhum dado para exibir nos Relatórios com os filtros atuais.")
             else:
-                if vendedor_selecionado_sess == "Todos":
-                    st.subheader("📋 Visão Geral da Empresa")
-                    tipo_visao_geral = st.radio(
-                        "Escolha como visualizar os dados gerais:",
-                        ["Resumo por Vendedor", "Resumo Dia a Dia (Empresa)"],
-                        horizontal=True
-                    )
-                    if tipo_visao_geral == "Resumo por Vendedor":
-                        st.markdown("##### Total de Vendas por Vendedor")
-                        tabela_geral_df = gerar_tabela_geral(df_filtrado)
-                        st.dataframe(tabela_geral_df, use_container_width=True)
-                    elif tipo_visao_geral == "Resumo Dia a Dia (Empresa)":
-                        st.markdown("##### Vendas Resumidas da Empresa (Dia a Dia)")
-                        tabela_resumo_dia_df = gerar_tabela_diaria_empresa(df_filtrado)
-                        st.dataframe(tabela_resumo_dia_df, use_container_width=True)
+                tab_vendas, tab_abc = st.tabs(["📋 Visão de Vendas", "📊 Análise de Clientes (ABC)"])
 
-                    # --- Ranking apenas se "Todos" estiver selecionado, dentro do tab2 ---
-                    st.markdown("---")
-                    st.subheader("🏆 Ranking de Vendedores no Período")
+                with tab_vendas:
+                    if vendedor_selecionado_sess == "Todos":
+                        st.subheader("📋 Visão Geral da Empresa")
+                        tipo_visao_geral = st.radio(
+                            "Escolha como visualizar os dados gerais:",
+                            ["Resumo por Vendedor", "Resumo Dia a Dia (Empresa)"],
+                            horizontal=True
+                        )
+                        if tipo_visao_geral == "Resumo por Vendedor":
+                            st.markdown("##### Total de Vendas por Vendedor")
+                            tabela_geral_df = gerar_tabela_geral(df_filtrado)
+                            st.dataframe(tabela_geral_df, use_container_width=True)
+                        elif tipo_visao_geral == "Resumo Dia a Dia (Empresa)":
+                            st.markdown("##### Vendas Resumidas da Empresa (Dia a Dia)")
+                            tabela_resumo_dia_df = gerar_tabela_diaria_empresa(df_filtrado)
+                            st.dataframe(tabela_resumo_dia_df, use_container_width=True)
 
-                    df_ranking = gerar_dados_ranking(df_filtrado)
-
-                    if not df_ranking.empty:
-                        col1, col2 = st.columns(2)
-                        for tipo_rank, col in zip(["OPD", "Distribuição"], [col1, col2]):
-                            if tipo_rank in df_ranking.columns and df_ranking[tipo_rank].sum() > 0:
-                                with col:
-                                    st.markdown(f"##### {tipo_rank}")
-                                    df_sorted = df_ranking.sort_values(by=tipo_rank, ascending=False)
-                                    df_top3 = df_sorted.head(3).copy()
-
-                                    # Cores ouro, prata, bronze
-                                    cores = ['#e02500', '#e93900', '#f35202']
-                                    df_top3['Cor'] = cores[:len(df_top3)]
-
-                                    fig = px.bar(
-                                        df_top3.sort_values(by=tipo_rank, ascending=True),
-                                        x=tipo_rank, y="Vendedor",
-                                        orientation='h',
-                                        text_auto=True,
-                                        color='Cor',
-                                        color_discrete_map={c: c for c in cores}
-                                    )
-                                    fig.update_traces(texttemplate='R$ %{x:,.2f}')
-                                    fig.update_layout(height=300, showlegend=False)
-                                    st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                with col:
-                                    st.info(f"Nenhuma venda '{tipo_rank}' encontrada.")
-                    else:
-                        st.info("Ranking não pôde ser gerado. Verifique os dados.")
-
-                else:
-                    st.subheader(f"📋 Detalhe de Vendas - {vendedor_selecionado_sess}")
-                    tabela_detalhada, totais_vendedor = gerar_tabela_vendedor(df_filtrado)
-                    if not tabela_detalhada.empty:
-                        st.dataframe(tabela_detalhada, use_container_width=True)
                         st.markdown("---")
-                        st.subheader("Resumo do Vendedor no Período")
-                        col1_vend, col2_vend, col3_vend = st.columns(3)
-                        col1_vend.metric("🔹 Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
-                        col2_vend.metric("🔸 Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
-                        col3_vend.metric("💰 Total Geral Vendedor", f"R$ {totais_vendedor.get('Total', 0):,.2f}")
+                        st.subheader("🏆 Ranking de Vendedores no Período")
+                        df_ranking = gerar_dados_ranking(df_filtrado)
+
+                        if not df_ranking.empty:
+                            col1, col2 = st.columns(2)
+                            for tipo_rank, col in zip(["OPD", "Distribuição"], [col1, col2]):
+                                if tipo_rank in df_ranking.columns and df_ranking[tipo_rank].sum() > 0:
+                                    with col:
+                                        st.markdown(f"##### {tipo_rank}")
+                                        df_sorted = df_ranking.sort_values(by=tipo_rank, ascending=False)
+                                        df_top3 = df_sorted.head(3).copy()
+                                        cores = ['#e02500', '#e93900', '#f35202']
+                                        df_top3['Cor'] = cores[:len(df_top3)]
+
+                                        fig = px.bar(
+                                            df_top3.sort_values(by=tipo_rank, ascending=True),
+                                            x=tipo_rank, y="Vendedor",
+                                            orientation='h',
+                                            text_auto=True,
+                                            color='Cor',
+                                            color_discrete_map={c: c for c in cores}
+                                        )
+                                        fig.update_traces(texttemplate='R$ %{x:,.2f}')
+                                        fig.update_layout(height=300, showlegend=False)
+                                        st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    with col:
+                                        st.info(f"Nenhuma venda '{tipo_rank}' encontrada.")
+                        else:
+                            st.info("Ranking não pôde ser gerado. Verifique os dados.")
+                    else:
+                        st.subheader(f"📋 Detalhe de Vendas - {vendedor_selecionado_sess}")
+                        tabela_detalhada, totais_vendedor = gerar_tabela_vendedor(df_filtrado)
+                        if not tabela_detalhada.empty:
+                            st.dataframe(tabela_detalhada, use_container_width=True)
+                            st.markdown("---")
+                            st.subheader("Resumo do Vendedor no Período")
+                            col1_vend, col2_vend, col3_vend = st.columns(3)
+                            col1_vend.metric("🔹 Total OPD", f"R$ {totais_vendedor.get('OPD', 0):,.2f}")
+                            col2_vend.metric("🔸 Total Distribuição", f"R$ {totais_vendedor.get('Distribuição', 0):,.2f}")
+                            col3_vend.metric("💰 Total Geral Vendedor", f"R$ {totais_vendedor.get('Total', 0):,.2f}")
+
+                with tab_abc:
+                    st.subheader("🔍 Análise de Clientes por Curva ABC")
+                    st.markdown("Esta análise classifica seus clientes em três categorias com base no faturamento, ajudando a focar os esforços de vendas.")
+                    
+                    df_abc = gerar_analise_abc_clientes(df_filtrado)
+
+                    if df_abc is not None:
+                        total_clientes = df_abc['CLI_RAZ'].nunique()
+                        clientes_a = df_abc[df_abc['Classe'] == 'A']['CLI_RAZ'].nunique()
+                        perc_a = (clientes_a / total_clientes) * 100 if total_clientes > 0 else 0
+
+                        st.info(f"💡 **{clientes_a} clientes (ou {perc_a:.1f}% do total)** correspondem a **80%** do seu faturamento no período. Estes são seus clientes **Classe A**.")
+
+                        fig_abc = px.pie(
+                            df_abc,
+                            names='Classe',
+                            title='Distribuição de Clientes por Classe ABC',
+                            color='Classe',
+                            color_discrete_map={'A': '#e02500', 'B': '#f35202', 'C': '#313334'}
+                        )
+                        st.plotly_chart(fig_abc, use_container_width=True)
+
+                        with st.expander("Ver detalhamento completo da Curva ABC"):
+                            st.dataframe(df_abc.style.format({
+                                'Valor Total Vendas': "R$ {:,.2f}",
+                                '% Participação': "{:.2%}",
+                                '% Acumulada': "{:.2%}"
+                            }), use_container_width=True)
+                    else:
+                        st.warning("Não foi possível gerar a análise ABC.")
 
 
     # --------------------------------------------------------------------------------
@@ -1052,13 +1168,22 @@ else:
     # --------------------------------------------------------------------------------
     elif pagina_selecionada == "Relatórios Financeiros":
 
-        caminho_financeiro = "resources/FINANCEIRO.xlsx"
+        caminho_financeiro = "resources/GERAL.xlsx"
         df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
 
         if df_receber is not None and df_pagar is not None:
 
             # --- FILTROS ESPECÍFICOS PARA O FINANCEIRO ---
             st.sidebar.header("Filtros Financeiros")
+            
+            saldo_inicial = st.sidebar.number_input(
+                "💰 Informe o Saldo Inicial em Caixa (R$)", 
+                # Sem min_value, ele aceita números negativos
+                value=10000.0, 
+                step=1000.0,
+                format="%.2f",
+                help="Você pode inserir valores negativos se o caixa começou o período devedor."
+            )
 
             # Unir todas as entidades únicas (Cliente + Fornecedor)
             entidades_unicas = sorted(
@@ -1094,7 +1219,7 @@ else:
                 ]
 
             # --- ABAS PARA VISUALIZAÇÃO ---
-            tab1, tab2 = st.tabs(["📊 Contas a Receber", "💸 Contas a Pagar"])
+            tab1, tab2, tab3 = st.tabs(["📊 Contas a Receber", "💸 Contas a Pagar", "📦 Fluxo de Caixa"])
 
             with tab1:
                 criar_painel_financeiro_avancado(
@@ -1103,9 +1228,9 @@ else:
                     coluna_valor='Valor',
                     coluna_status='Status',
                     coluna_entidade='Cliente',
-                    coluna_vencimento='Data Vencimento'
+                    coluna_vencimento='Data Vencimento',
+                    coluna_inadimplencia='Inadimplência' # <-- ATIVANDO A NOVA FUNCIONALIDADE
                 )
-
             with tab2:
                 criar_painel_financeiro_avancado(
                     "💸 Visão Geral de Contas a Pagar",
@@ -1115,6 +1240,239 @@ else:
                     coluna_entidade='Fornecedor',
                     coluna_vencimento='Data Vencimento'
                 )
+
+            with tab3:
+                st.subheader("🌊 Projeção de Fluxo de Caixa")
+                st.markdown("Esta análise projeta o saldo futuro em caixa com base nas contas em aberto e no saldo inicial informado.")
+
+                # --- SIMULADOR DE CENÁRIOS (recolhível) ---
+                with st.expander("🔬 Abrir Simulador de Cenários (What-If)"):
+                    st.markdown("Ajuste abaixo receitas e despesas simuladas para observar os impactos no fluxo de caixa.")
+
+                    col_sim1, col_sim2, col_sim3 = st.columns(3)
+                    with col_sim1:
+                        sim_receita_valor = st.number_input("Simular nova receita (R$)", value=0.0, step=100.0)
+                    with col_sim2:
+                        sim_receita_data = st.date_input("Data da nova receita", value=datetime.date.today())
+                    with col_sim3:
+                        st.write("")
+                        st.write("")
+                        aplicar_receita = st.button("Aplicar Receita")
+
+                    col_sim_d1, col_sim_d2, col_sim_d3 = st.columns(3)
+                    with col_sim_d1:
+                        sim_despesa_valor = st.number_input("Simular nova despesa (R$)", value=0.0, step=100.0)
+                    with col_sim_d2:
+                        sim_despesa_data = st.date_input("Data da nova despesa", value=datetime.date.today())
+                    with col_sim_d3:
+                        st.write("")
+                        st.write("")
+                        aplicar_despesa = st.button("Aplicar Despesa")
+
+                # --- APLICAR SIMULAÇÕES ---
+                df_receber_simulado = df_receber.copy()
+                df_pagar_simulado = df_pagar.copy()
+
+                if aplicar_receita and sim_receita_valor > 0:
+                    nova_receita = pd.DataFrame([{
+                        'Cliente': 'RECEITA SIMULADA',
+                        'Data Vencimento': pd.to_datetime(sim_receita_data),
+                        'Valor': sim_receita_valor,
+                        'Status': 'EM ABERTO'
+                    }])
+                    df_receber_simulado = pd.concat([df_receber_simulado, nova_receita], ignore_index=True)
+                    st.success(f"✅ Receita de R$ {sim_receita_valor:,.2f} simulada para {sim_receita_data.strftime('%d/%m/%Y')}.")
+
+                if aplicar_despesa and sim_despesa_valor > 0:
+                    nova_despesa = pd.DataFrame([{
+                        'Fornecedor': 'DESPESA SIMULADA',
+                        'Data Vencimento': pd.to_datetime(sim_despesa_data),
+                        'Valor': sim_despesa_valor,
+                        'Status': 'EM ABERTO'
+                    }])
+                    df_pagar_simulado = pd.concat([df_pagar_simulado, nova_despesa], ignore_index=True)
+                    st.success(f"✅ Despesa de R$ {sim_despesa_valor:,.2f} simulada para {sim_despesa_data.strftime('%d/%m/%Y')}.")
+
+                # --- VERIFICAR USO DE SIMULAÇÃO ---
+                tem_simulacao = aplicar_receita or aplicar_despesa
+                if tem_simulacao:
+                    st.info("🧪 Projeção considerando valores simulados.")
+                    df_fluxo = preparar_dados_fluxo_caixa(df_receber_simulado, df_pagar_simulado, saldo_inicial, data_inicial, data_final)
+                    despesas_base = df_pagar_simulado
+                else:
+                    df_fluxo = preparar_dados_fluxo_caixa(df_receber, df_pagar, saldo_inicial, data_inicial, data_final)
+                    despesas_base = df_pagar
+
+                # --- RESULTADOS DA PROJEÇÃO ---
+                if df_fluxo.empty:
+                    st.warning("⚠️ Não há dados suficientes para gerar a projeção de fluxo de caixa.")
+                else:
+                    # --- KPIs ---
+                    menor_saldo_previsto = df_fluxo['Saldo Acumulado'].min()
+                    dia_menor_saldo = df_fluxo.loc[df_fluxo['Saldo Acumulado'].idxmin(), 'Data'].strftime('%d/%m/%Y')
+                    maior_saldo_previsto = df_fluxo['Saldo Acumulado'].max()
+                    dias_fluxo_negativo = df_fluxo[df_fluxo['Fluxo Líquido'] < 0].shape[0]
+
+                    kpi1, kpi2, kpi3 = st.columns(3)
+                    kpi1.metric("📉 Menor Saldo Previsto", f"R$ {menor_saldo_previsto:,.2f}", help=f"Pior saldo em {dia_menor_saldo}.")
+                    kpi2.metric("📈 Maior Saldo Previsto", f"R$ {maior_saldo_previsto:,.2f}")
+                    kpi3.metric("🔻 Dias com Fluxo Negativo", f"{dias_fluxo_negativo} dias")
+
+                    st.markdown("---")
+
+                    # --- GRÁFICO: PROJEÇÃO DE FLUXO ---
+                    from plotly.subplots import make_subplots
+                    import plotly.graph_objects as go
+
+                    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+                    fig.add_trace(
+                        go.Bar(
+                            x=df_fluxo['Data'],
+                            y=df_fluxo['Fluxo Líquido'],
+                            name='Fluxo Líquido Diário',
+                            marker_color=['#dc3545' if v < 0 else '#28a745' for v in df_fluxo['Fluxo Líquido']]
+                        ),
+                        secondary_y=False,
+                    )
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_fluxo['Data'],
+                            y=df_fluxo['Saldo Acumulado'],
+                            name='Saldo Acumulado',
+                            mode='lines+markers'
+                        ),
+                        secondary_y=True,
+                    )
+
+                    fig.add_hline(y=0, line_dash="dash", line_color="red", secondary_y=True)
+
+                    fig.update_layout(
+                        title_text="📊 Saldo Acumulado vs. Fluxo Líquido Diário",
+                        xaxis_title="Data",
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(l=10, r=10, t=40, b=10)
+                    )
+                    fig.update_yaxes(title_text="Fluxo Líquido (R$)", secondary_y=False)
+                    fig.update_yaxes(title_text="Saldo Acumulado (R$)", secondary_y=True)
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # --- ANÁLISES ADICIONAIS ---
+                    st.markdown("---")
+                    st.subheader("🔎 Análises Adicionais")
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.markdown("##### ⛽ Maiores Despesas no Período")
+                        despesas_aberto = despesas_base[despesas_base['Status'] == 'EM ABERTO'].copy()
+                        if not despesas_aberto.empty:
+                            top_10_despesas = despesas_aberto.groupby('Fornecedor')['Valor'].sum().nlargest(10).sort_values().reset_index()
+                            fig_despesas = px.bar(
+                                top_10_despesas,
+                                y='Fornecedor',
+                                x='Valor',
+                                orientation='h',
+                                text_auto=True,
+                                height=400
+                            )
+                            fig_despesas.update_traces(marker_color='#dc3545', texttemplate='R$ %{x:,.2f}')
+                            fig_despesas.update_layout(xaxis_title="Valor a Pagar (R$)", yaxis_title=None, margin=dict(l=10, r=10, t=30, b=10))
+                            st.plotly_chart(fig_despesas, use_container_width=True)
+                        else:
+                            st.info("Não há despesas em aberto para analisar.")
+
+                    with col2:
+                        st.markdown("##### ⚖️ Receitas vs. Despesas")
+                        periodo_agregacao = st.radio(
+                            "Visualizar por:",
+                            ["Diário", "Semanal", "Mensal"],
+                            horizontal=True,
+                            key='agregacao_receita_despesa'
+                        )
+
+                        df_fluxo_agregado = df_fluxo.set_index('Data')
+                        if periodo_agregacao == "Semanal":
+                            df_plot = df_fluxo_agregado[['Entradas', 'Saídas']].resample('W-MON').sum().reset_index()
+                            df_plot['Data'] = df_plot['Data'].dt.strftime('%d/%m (Sem)')
+                        elif periodo_agregacao == "Mensal":
+                            df_plot = df_fluxo_agregado[['Entradas', 'Saídas']].resample('M').sum().reset_index()
+                            df_plot['Data'] = df_plot['Data'].dt.strftime('%b/%Y')
+                        else:
+                            df_plot = df_fluxo[['Data', 'Entradas', 'Saídas']]
+                            df_plot['Data'] = df_plot['Data'].dt.strftime('%d/%m')
+
+                        fig_entradas_saidas = px.bar(
+                            df_plot,
+                            x='Data',
+                            y=['Entradas', 'Saídas'],
+                            barmode='group',
+                            height=400,
+                            color_discrete_map={'Entradas': '#28a745', 'Saídas': '#dc3545'}
+                        )
+                        fig_entradas_saidas.update_layout(
+                            xaxis_title=None,
+                            yaxis_title="Valor (R$)",
+                            legend_title_text='Legenda',
+                            margin=dict(l=10, r=10, t=30, b=10)
+                        )
+                        st.plotly_chart(fig_entradas_saidas, use_container_width=True)
+
+                    # --- DETALHAMENTO ---
+                    with st.expander("📋 Ver detalhamento diário do fluxo de caixa"):
+                        st.dataframe(df_fluxo.style.format({
+                            'Entradas': "R$ {:,.2f}",
+                            'Saídas': "R$ {:,.2f}",
+                            'Fluxo Líquido': "R$ {:,.2f}",
+                            'Saldo Acumulado': "R$ {:,.2f}",
+                            'Data': '{:%d/%m/%Y}'
+                        }), use_container_width=True)
+
+    elif pagina_selecionada == "Análise de Resultados (DRE)":
+
+        caminho_financeiro = "resources/GERAL.xlsx"
+        df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
+
+        # Usar os DataFrames já carregados e filtrados pelo período principal
+        if df_filtrado is not None and df_pagar is not None:
             
+            # Agrupar dados por mês para o DRE
+            vendas_mensais = df_filtrado.set_index('DAT_CAD').resample('M')['PED_TOTAL'].sum().rename("Receita Bruta (Vendas)")
+            despesas_mensais = df_pagar.set_index('Data Vencimento').resample('M')['Valor'].sum().rename("Despesas Operacionais")
+
+            # Unir em um DataFrame de resultados
+            df_resultados = pd.concat([vendas_mensais, despesas_mensais], axis=1).fillna(0)
+            df_resultados['Lucro/Prejuízo'] = df_resultados['Receita Bruta (Vendas)'] - df_resultados['Despesas Operacionais']
+            df_resultados.index = df_resultados.index.strftime('%b/%Y') # Formatar data para exibição
+
+            if not df_resultados.empty:
+                # KPIs Gerais
+                st.write("🔍 Tabela de Resultados Calculada:", df_resultados)
+                st.write("🔍 Todas as linhas com índice:", df_resultados.reset_index())
+                st.write("✅ Soma real calculada agora:", df_resultados['Lucro/Prejuízo'].sum())
+
+                lucro_total = df_resultados['Lucro/Prejuízo'].sum()
+                cor_delta = "normal" if lucro_total >= 0 else "inverse"
+                st.metric("Resultado Final no Período", f"R$ {lucro_total:,.2f}", delta_color=cor_delta)
+
+                # Gráfico de Resultados
+                fig_dre = px.bar(
+                    df_resultados,
+                    y=['Receita Bruta (Vendas)', 'Despesas Operacionais', 'Lucro/Prejuízo'],
+                    barmode='group',
+                    title="Receita vs. Despesas e Lucratividade Mensal",
+                    color_discrete_map={
+                        'Receita Bruta (Vendas)': '#28a745', 
+                        'Despesas Operacionais': '#dc3545', 
+                        'Lucro/Prejuízo': '#007bff'
+                    }
+                )
+                st.plotly_chart(fig_dre, use_container_width=True)
+
+                with st.expander("Ver tabela de resultados detalhada"):
+                    st.dataframe(df_resultados.style.format("R$ {:,.2f}"), use_container_width=True)
+            else:
+                st.warning("Não há dados suficientes para gerar a análise de resultados.")
         else:
-            st.warning("⚠️ Não foi possível carregar os dados financeiros. Verifique o arquivo e as abas.")
+            st.warning("Dados de vendas ou financeiros não estão carregados. Processe os dados no Painel Principal primeiro.")
