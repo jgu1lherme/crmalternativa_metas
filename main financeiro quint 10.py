@@ -1431,27 +1431,47 @@ else:
 
     elif pagina_selecionada == "Análise de Resultados (DRE)":
 
+        import pandas as pd
+        from datetime import datetime
+
         caminho_financeiro = "resources/GERAL.xlsx"
         df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
 
+        def filtrar_vendas_especificas(df_vendas):
+            """Filtra o DataFrame de vendas aplicando os critérios OPD e DISTRIBUIÇÃO/LOJA com status específicos."""
+            if df_vendas is None or df_vendas.empty:
+                return pd.DataFrame(columns=df_vendas.columns)
+
+            filtro_opd = (df_vendas["PED_OBS_INT"] == "OPD") & (df_vendas["PED_STATUS"] == "F")
+            filtro_distribuicao = df_vendas["PED_OBS_INT"].isin(["DISTRIBICAO", "DISTRIBUICAO", "DISTRIBUIÇÃO", "LOJA"]) & \
+                                (df_vendas["PED_STATUS"].isin(["F", "N"]))
+            return df_vendas[filtro_opd | filtro_distribuicao]
+
         # Usar os DataFrames já carregados e filtrados pelo período principal
         if df_filtrado is not None and df_pagar is not None:
-            
+
+            # Aplica o filtro específico nas vendas para o DRE
+            df_vendas_filtradas_dre = filtrar_vendas_especificas(df_filtrado)
+
             # Agrupar dados por mês para o DRE
-            vendas_mensais = df_filtrado.set_index('DAT_CAD').resample('M')['PED_TOTAL'].sum().rename("Receita Bruta (Vendas)")
+            vendas_mensais = df_vendas_filtradas_dre.set_index('DAT_CAD').resample('M')['PED_TOTAL'].sum().rename("Receita Bruta (Vendas)")
             despesas_mensais = df_pagar.set_index('Data Vencimento').resample('M')['Valor'].sum().rename("Despesas Operacionais")
 
             # Unir em um DataFrame de resultados
             df_resultados = pd.concat([vendas_mensais, despesas_mensais], axis=1).fillna(0)
             df_resultados['Lucro/Prejuízo'] = df_resultados['Receita Bruta (Vendas)'] - df_resultados['Despesas Operacionais']
-            df_resultados.index = df_resultados.index.strftime('%b/%Y') # Formatar data para exibição
+
+            # Filtrar até o fim do ano atual
+            df_resultados.index = pd.to_datetime(df_resultados.index)
+            ano_atual = datetime.now().year
+            fim_ano_atual = pd.Timestamp(f"{ano_atual}-12-31")
+            df_resultados = df_resultados[df_resultados.index <= fim_ano_atual]
+
+            # Formatar data para exibição
+            df_resultados.index = df_resultados.index.strftime('%b/%Y')
 
             if not df_resultados.empty:
                 # KPIs Gerais
-                st.write("🔍 Tabela de Resultados Calculada:", df_resultados)
-                st.write("🔍 Todas as linhas com índice:", df_resultados.reset_index())
-                st.write("✅ Soma real calculada agora:", df_resultados['Lucro/Prejuízo'].sum())
-
                 lucro_total = df_resultados['Lucro/Prejuízo'].sum()
                 cor_delta = "normal" if lucro_total >= 0 else "inverse"
                 st.metric("Resultado Final no Período", f"R$ {lucro_total:,.2f}", delta_color=cor_delta)
@@ -1463,8 +1483,8 @@ else:
                     barmode='group',
                     title="Receita vs. Despesas e Lucratividade Mensal",
                     color_discrete_map={
-                        'Receita Bruta (Vendas)': '#28a745', 
-                        'Despesas Operacionais': '#dc3545', 
+                        'Receita Bruta (Vendas)': '#28a745',
+                        'Despesas Operacionais': '#dc3545',
                         'Lucro/Prejuízo': '#007bff'
                     }
                 )
