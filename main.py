@@ -968,9 +968,10 @@ else:
     feriados_sess = st.session_state['feriados'] # Renomeado para evitar conflito com a variável global
     vendedor_selecionado_sess = st.session_state['vendedor_selecionado'] # Renomeado
 
-    if pagina_selecionada == "Painel de Vendas":
-        tab1, tab2, tab3 = st.tabs(["📊 Visão Geral", "📋 Relatórios Detalhados", "🔮 Previsão de Vendas (Em Teste)"])
-        with tab1:
+if pagina_selecionada == "Painel de Vendas":
+    tab1, tab2, tab3 = st.tabs(["\U0001F4CA Visão Geral", "\U0001F4CB Relatórios Detalhados", "\U0001F52E Previsão de Vendas (Em Teste)"])
+
+    with tab1:
             if df_filtrado is None or df_filtrado.empty:
                 st.warning("Nenhum dado para exibir no Painel Principal com os filtros atuais.")
             elif not comparacao:
@@ -1108,7 +1109,9 @@ else:
                     with col2_m:
                         st.info("Dados de metas Distribuição (AMC) não disponíveis.")
 
-        with tab2:
+        pass
+
+    with tab2:
             if df_filtrado is None or df_filtrado.empty:
                 st.warning("Nenhum dado para exibir nos Relatórios com os filtros atuais.")
             else:
@@ -1205,136 +1208,129 @@ else:
                     else:
                         st.warning("Não foi possível gerar a análise ABC.")
 
-            with tab3:
-                st.subheader("🔮 Previsão de Vendas - Próximos 30 dias")
-    
-                if df_filtrado is None or df_filtrado.empty:
-                    st.warning("⚠️ Não há dados suficientes para gerar uma previsão.")
-                else:
-                    # --- Preparar os dados ---
-                    df_forecast = df_filtrado.copy()
-                    df_forecast = df_forecast[['DAT_CAD_DATE', 'PED_TOTAL']].rename(
-                        columns={'DAT_CAD_DATE': 'ds', 'PED_TOTAL': 'y'}
-                    )
-                    df_forecast['ds'] = pd.to_datetime(df_forecast['ds'])
-                    df_forecast = df_forecast.groupby('ds').sum().reset_index().sort_values('ds')
-    
-                    # --- Criar e treinar o modelo ---
-                    modelo = Prophet(
-                        daily_seasonality=False,
-                        weekly_seasonality=True,
-                        yearly_seasonality=True,
-                        changepoint_prior_scale=0.1
-                    )
-                    modelo.fit(df_forecast)
-    
-                    # --- Criar datas futuras e gerar previsão ---
-                    futuro = modelo.make_future_dataframe(periods=30)
-                    previsao = modelo.predict(futuro)
-    
-                    # --- KPIs principais ---
-                    ultima_data = df_forecast['ds'].max()
-                    previsao_futura = previsao[previsao['ds'] > ultima_data].copy()
-                    total_previsto = previsao_futura['yhat'].sum()
-                    total_realizado = df_forecast['y'].sum()
-    
-                    # Média e desvio padrão
-                    media_historica = df_forecast['y'].mean()
-                    std_historica = df_forecast['y'].std()
-                    media_prevista = previsao_futura['yhat'].mean()
-                    std_prevista = previsao_futura['yhat'].std()
-    
-                    # Crescimento esperado em relação ao histórico
-                    crescimento_percentual = ((total_previsto - total_realizado) / total_realizado) * 100 if total_realizado else 0
-    
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("📅 Total Previsto (30 dias)", f"R$ {total_previsto:,.2f}", delta=f"{crescimento_percentual:.2f}%")
-                    col2.metric("📈 Total Histórico", f"R$ {total_realizado:,.2f}")
-                    col3.metric("📊 Média Diária Histórica", f"R$ {media_historica:,.2f}", delta=f"{std_historica:.2f}")
-                    col4.metric("📊 Média Diária Prevista", f"R$ {media_prevista:,.2f}", delta=f"{std_prevista:.2f}")
-    
-                    # --- Gráfico principal: previsão com faixa de confiança ---
-                    fig_forecast = plot_plotly(modelo, previsao)
-                    for trace in fig_forecast.data:
-                        if trace.name is not None and ('yhat_lower' in trace.name or 'yhat_upper' in trace.name or 'cap' in trace.name):
-                            trace.update(opacity=0.15, fillcolor='rgba(200, 200, 200, 0.3)')
-    
-                    fig_forecast.update_layout(
-                        title="📈 Previsão de Vendas Diárias com Faixa de Confiança (Próximos 30 dias)",
-                        xaxis_title="Data",
-                        yaxis_title="Valor das Vendas (R$)",
-                        plot_bgcolor="#1c1c1c",
-                        paper_bgcolor="#1c1c1c",
-                        font=dict(color="white", size=14),
-                        legend=dict(title="Legenda", font=dict(size=12)),
-                        showlegend=True,
-                        height=550,
-                    )
-                    st.plotly_chart(fig_forecast, use_container_width=True)
-    
-                    # --- Gráfico extra 1: comparação entre histórico e previsão só para os próximos 30 dias ---
-                    df_comparacao = pd.merge(
-                        df_forecast[['ds', 'y']], 
-                        previsao[['ds', 'yhat']], 
-                        on='ds', how='outer'
-                    )
-                    df_comparacao = df_comparacao[df_comparacao['ds'] > (ultima_data - pd.Timedelta(days=30))]  # últimos 30 dias + futuros
-    
-                    fig_comparacao = go.Figure()
-                    fig_comparacao.add_trace(go.Bar(
-                        x=df_comparacao['ds'], y=df_comparacao['y'],
-                        name='Vendas Reais',
-                        marker_color='cyan',
-                        opacity=0.6
-                    ))
-                    fig_comparacao.add_trace(go.Scatter(
-                        x=df_comparacao['ds'], y=df_comparacao['yhat'],
-                        mode='lines+markers',
-                        name='Previsão',
-                        line=dict(color='orange', width=3)
-                    ))
-                    fig_comparacao.update_layout(
-                        title="📊 Últimos 30 dias: Vendas Reais vs Previsão",
-                        xaxis_title="Data",
-                        yaxis_title="Valor das Vendas (R$)",
-                        plot_bgcolor="#1c1c1c",
-                        paper_bgcolor="#1c1c1c",
-                        font=dict(color="white", size=14),
-                        legend=dict(font=dict(size=12)),
-                        height=400,
-                    )
-                    st.plotly_chart(fig_comparacao, use_container_width=True)
-    
-                    # --- Gráfico extra 2: decomposição da série (tendência + sazonalidades) ---
-                    st.markdown("### 📉 Decomposição da série temporal (Tendência e Sazonalidades)")
-                    fig_comp = modelo.plot_components(previsao)
-                    st.pyplot(fig_comp)
-    
-                    # --- Explicações detalhadas ---
-                    with st.expander("ℹ️ Entenda o dashboard de previsão de vendas"):
-                        st.markdown("""
-                        ### Métricas principais:
-                        - **Total Previsto (30 dias):** Soma estimada das vendas para os próximos 30 dias.
-                        - **Total Histórico:** Soma das vendas já realizadas.
-                        - **Média Diária Histórica:** Média diária das vendas reais.
-                        - **Média Diária Prevista:** Média diária das vendas previstas para os próximos 30 dias.
-                        - **Crescimento Percentual:** Diferença percentual entre o total previsto e o histórico.
-    
-                        ### Gráficos:
-                        - **Previsão com faixa de confiança:** Linha azul mostra a previsão; faixa cinza mostra a margem de erro.
-                        - **Comparação últimos 30 dias:** Barras azuis para vendas reais, linha laranja para previsão.
-                        - **Decomposição:** Entenda as tendências e padrões sazonais capturados pelo modelo.
-    
-                        ### Como usar:
-                        - Planeje seu estoque e equipe baseando-se no total previsto e tendências.
-                        - Use a comparação para validar previsões e entender variações recentes.
-                        - Analise a decomposição para identificar sazonalidades e períodos de alta/baixa.
-    
-                        ### Por que usar?
-                        - Captura padrões complexos de séries temporais.
-                        - Ajusta tendências e sazonalidades automaticamente.
-                        - Lida bem com mudanças repentinas nas vendas.
-                        """)
+        pass
+
+    with tab3:
+        st.subheader("\U0001F52E Previsão de Vendas - Próximos 30 dias")
+
+        if df_filtrado is None or df_filtrado.empty:
+            st.warning("\u26a0\ufe0f Não há dados suficientes para gerar uma previsão.")
+        else:
+            # --- Preparar os dados ---
+            df_forecast = df_filtrado.copy()
+            df_forecast = df_forecast[['DAT_CAD_DATE', 'PED_TOTAL']].rename(
+                columns={'DAT_CAD_DATE': 'ds', 'PED_TOTAL': 'y'}
+            )
+            df_forecast['ds'] = pd.to_datetime(df_forecast['ds'])
+            df_forecast = df_forecast.groupby('ds').sum().reset_index().sort_values('ds')
+
+            # --- Criar e treinar o modelo ---
+            modelo = Prophet(
+                daily_seasonality=False,
+                weekly_seasonality=True,
+                yearly_seasonality=True,
+                changepoint_prior_scale=0.1
+            )
+            modelo.fit(df_forecast)
+
+            # --- Criar datas futuras e gerar previsão ---
+            futuro = modelo.make_future_dataframe(periods=30)
+            previsao = modelo.predict(futuro)
+
+            # --- KPIs principais ---
+            ultima_data = df_forecast['ds'].max()
+            previsao_futura = previsao[previsao['ds'] > ultima_data].copy()
+            total_previsto = previsao_futura['yhat'].sum()
+            total_realizado = df_forecast['y'].sum()
+
+            media_historica = df_forecast['y'].mean()
+            std_historica = df_forecast['y'].std()
+            media_prevista = previsao_futura['yhat'].mean()
+            std_prevista = previsao_futura['yhat'].std()
+
+            crescimento_percentual = ((total_previsto - total_realizado) / total_realizado) * 100 if total_realizado else 0
+
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("\U0001F4C5 Total Previsto (30 dias)", f"R$ {total_previsto:,.2f}", delta=f"{crescimento_percentual:.2f}%")
+            col2.metric("\U0001F4C8 Total Histórico", f"R$ {total_realizado:,.2f}")
+            col3.metric("\U0001F4CA Média Diária Histórica", f"R$ {media_historica:,.2f}", delta=f"{std_historica:.2f}")
+            col4.metric("\U0001F4CA Média Diária Prevista", f"R$ {media_prevista:,.2f}", delta=f"{std_prevista:.2f}")
+
+            fig_forecast = plot_plotly(modelo, previsao)
+            for trace in fig_forecast.data:
+                if trace.name and ('yhat_lower' in trace.name or 'yhat_upper' in trace.name or 'cap' in trace.name):
+                    trace.update(opacity=0.15, fillcolor='rgba(200, 200, 200, 0.3)')
+
+            fig_forecast.update_layout(
+                title="\U0001F4C8 Previsão de Vendas Diárias com Faixa de Confiança (Próximos 30 dias)",
+                xaxis_title="Data",
+                yaxis_title="Valor das Vendas (R$)",
+                plot_bgcolor="#1c1c1c",
+                paper_bgcolor="#1c1c1c",
+                font=dict(color="white", size=14),
+                legend=dict(title="Legenda", font=dict(size=12)),
+                showlegend=True,
+                height=550,
+            )
+            st.plotly_chart(fig_forecast, use_container_width=True)
+
+            df_comparacao = pd.merge(
+                df_forecast[['ds', 'y']], 
+                previsao[['ds', 'yhat']], 
+                on='ds', how='outer'
+            )
+            df_comparacao = df_comparacao[df_comparacao['ds'] > (ultima_data - pd.Timedelta(days=30))]
+
+            fig_comparacao = go.Figure()
+            fig_comparacao.add_trace(go.Bar(
+                x=df_comparacao['ds'], y=df_comparacao['y'],
+                name='Vendas Reais', marker_color='cyan', opacity=0.6
+            ))
+            fig_comparacao.add_trace(go.Scatter(
+                x=df_comparacao['ds'], y=df_comparacao['yhat'],
+                mode='lines+markers', name='Previsão',
+                line=dict(color='orange', width=3)
+            ))
+            fig_comparacao.update_layout(
+                title="\U0001F4CA Últimos 30 dias: Vendas Reais vs Previsão",
+                xaxis_title="Data",
+                yaxis_title="Valor das Vendas (R$)",
+                plot_bgcolor="#1c1c1c",
+                paper_bgcolor="#1c1c1c",
+                font=dict(color="white", size=14),
+                legend=dict(font=dict(size=12)),
+                height=400,
+            )
+            st.plotly_chart(fig_comparacao, use_container_width=True)
+
+            st.markdown("### \U0001F4C9 Decomposição da série temporal (Tendência e Sazonalidades)")
+            fig_comp = modelo.plot_components(previsao)
+            st.pyplot(fig_comp)
+
+            with st.expander("\u2139\ufe0f Entenda o dashboard de previsão de vendas"):
+                st.markdown("""
+                ### Métricas principais:
+                - **Total Previsto (30 dias):** Soma estimada das vendas para os próximos 30 dias.
+                - **Total Histórico:** Soma das vendas já realizadas.
+                - **Média Diária Histórica:** Média diária das vendas reais.
+                - **Média Diária Prevista:** Média diária das vendas previstas para os próximos 30 dias.
+                - **Crescimento Percentual:** Diferença percentual entre o total previsto e o histórico.
+
+                ### Gráficos:
+                - **Previsão com faixa de confiança:** Linha azul mostra a previsão; faixa cinza mostra a margem de erro.
+                - **Comparação últimos 30 dias:** Barras azuis para vendas reais, linha laranja para previsão.
+                - **Decomposição:** Entenda as tendências e padrões sazonais capturados pelo modelo.
+
+                ### Como usar:
+                - Planeje seu estoque e equipe baseando-se no total previsto e tendências.
+                - Use a comparação para validar previsões e entender variações recentes.
+                - Analise a decomposição para identificar sazonalidades e períodos de alta/baixa.
+
+                ### Por que usar?
+                - Captura padrões complexos de séries temporais.
+                - Ajusta tendências e sazonalidades automaticamente.
+                - Lida bem com mudanças repentinas nas vendas.
+                """)
 
 
     # --------------------------------------------------------------------------------
