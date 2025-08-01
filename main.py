@@ -1415,225 +1415,225 @@ else:
                     coluna_vencimento='Data Vencimento'
                 )
 
-        with tab3:
-            # st.subheader("🌊 Projeção de Fluxo de Caixa")
-            # st.markdown("Esta análise projeta o saldo futuro em caixa com base nas contas em aberto e no saldo inicial informado.")
+            with tab3:
+                # st.subheader("🌊 Projeção de Fluxo de Caixa")
+                # st.markdown("Esta análise projeta o saldo futuro em caixa com base nas contas em aberto e no saldo inicial informado.")
 
-            # --- SIMULADOR DE CENÁRIOS (recolhível) ---
-            with st.expander("🔬 Abrir Simulador de Cenários (What-If)"):
-                st.markdown("Ajuste abaixo receitas e despesas simuladas para observar os impactos no fluxo de caixa.")
+                # --- SIMULADOR DE CENÁRIOS (recolhível) ---
+                with st.expander("🔬 Abrir Simulador de Cenários (What-If)"):
+                    st.markdown("Ajuste abaixo receitas e despesas simuladas para observar os impactos no fluxo de caixa.")
 
-                col_sim1, col_sim2, col_sim3 = st.columns(3)
-                with col_sim1:
-                    sim_receita_valor = st.number_input("Simular nova receita (R$)", value=0.0, step=100.0, key="sim_receita_valor")
-                with col_sim2:
-                    sim_receita_data = st.date_input("Data da nova receita", value=datetime.date.today(), key="sim_receita_data")
-                with col_sim3:
-                    st.write("")
-                    st.write("")
-                    aplicar_receita = st.button("Aplicar Receita")
+                    col_sim1, col_sim2, col_sim3 = st.columns(3)
+                    with col_sim1:
+                        sim_receita_valor = st.number_input("Simular nova receita (R$)", value=0.0, step=100.0, key="sim_receita_valor")
+                    with col_sim2:
+                        sim_receita_data = st.date_input("Data da nova receita", value=datetime.date.today(), key="sim_receita_data")
+                    with col_sim3:
+                        st.write("")
+                        st.write("")
+                        aplicar_receita = st.button("Aplicar Receita")
 
-                col_sim_d1, col_sim_d2, col_sim_d3 = st.columns(3)
-                with col_sim_d1:
-                    sim_despesa_valor = st.number_input("Simular nova despesa (R$)", value=0.0, step=100.0, key="sim_despesa_valor")
-                with col_sim_d2:
-                    sim_despesa_data = st.date_input("Data da nova despesa", value=datetime.date.today(), key="sim_despesa_data")
-                with col_sim_d3:
-                    st.write("")
-                    st.write("")
-                    aplicar_despesa = st.button("Aplicar Despesa")
+                    col_sim_d1, col_sim_d2, col_sim_d3 = st.columns(3)
+                    with col_sim_d1:
+                        sim_despesa_valor = st.number_input("Simular nova despesa (R$)", value=0.0, step=100.0, key="sim_despesa_valor")
+                    with col_sim_d2:
+                        sim_despesa_data = st.date_input("Data da nova despesa", value=datetime.date.today(), key="sim_despesa_data")
+                    with col_sim_d3:
+                        st.write("")
+                        st.write("")
+                        aplicar_despesa = st.button("Aplicar Despesa")
 
-            # --- APLICAR SIMULAÇÕES ---
-            df_receber_simulado = df_receber.copy()
-            df_pagar_simulado = df_pagar.copy()
+                # --- APLICAR SIMULAÇÕES ---
+                df_receber_simulado = df_receber.copy()
+                df_pagar_simulado = df_pagar.copy()
 
-            if aplicar_receita and sim_receita_valor > 0:
-                nova_receita = pd.DataFrame([{'Cliente': 'RECEITA SIMULADA', 'Data Vencimento': pd.to_datetime(sim_receita_data), 'Valor': sim_receita_valor, 'Status': 'EM ABERTO'}])
-                df_receber_simulado = pd.concat([df_receber_simulado, nova_receita], ignore_index=True)
-                st.success(f"✅ Receita de R$ {sim_receita_valor:,.2f} simulada para {sim_receita_data.strftime('%d/%m/%Y')}.")
+                if aplicar_receita and sim_receita_valor > 0:
+                    nova_receita = pd.DataFrame([{'Cliente': 'RECEITA SIMULADA', 'Data Vencimento': pd.to_datetime(sim_receita_data), 'Valor': sim_receita_valor, 'Status': 'EM ABERTO'}])
+                    df_receber_simulado = pd.concat([df_receber_simulado, nova_receita], ignore_index=True)
+                    st.success(f"✅ Receita de R$ {sim_receita_valor:,.2f} simulada para {sim_receita_data.strftime('%d/%m/%Y')}.")
 
-            if aplicar_despesa and sim_despesa_valor > 0:
-                nova_despesa = pd.DataFrame([{'Fornecedor': 'DESPESA SIMULADA', 'Data Vencimento': pd.to_datetime(sim_despesa_data), 'Valor': sim_despesa_valor, 'Status': 'EM ABERTO'}])
-                df_pagar_simulado = pd.concat([df_pagar_simulado, nova_despesa], ignore_index=True)
-                st.success(f"✅ Despesa de R$ {sim_despesa_valor:,.2f} simulada para {sim_despesa_data.strftime('%d/%m/%Y')}.")
+                if aplicar_despesa and sim_despesa_valor > 0:
+                    nova_despesa = pd.DataFrame([{'Fornecedor': 'DESPESA SIMULADA', 'Data Vencimento': pd.to_datetime(sim_despesa_data), 'Valor': sim_despesa_valor, 'Status': 'EM ABERTO'}])
+                    df_pagar_simulado = pd.concat([df_pagar_simulado, nova_despesa], ignore_index=True)
+                    st.success(f"✅ Despesa de R$ {sim_despesa_valor:,.2f} simulada para {sim_despesa_data.strftime('%d/%m/%Y')}.")
 
-            # --- LÓGICA DE PREPARAÇÃO DOS DADOS ---
-            tem_simulacao = aplicar_receita or aplicar_despesa
-            if tem_simulacao:
-                st.info("🧪 Projeção considerando valores simulados.")
-                df_fluxo = preparar_dados_fluxo_caixa(df_receber_simulado, df_pagar_simulado, saldo_inicial, data_inicial, data_final)
-                despesas_base = df_pagar_simulado
-            else:
-                df_fluxo = preparar_dados_fluxo_caixa(df_receber, df_pagar, saldo_inicial, data_inicial, data_final)
-                despesas_base = df_pagar
+                # --- LÓGICA DE PREPARAÇÃO DOS DADOS ---
+                tem_simulacao = aplicar_receita or aplicar_despesa
+                if tem_simulacao:
+                    st.info("🧪 Projeção considerando valores simulados.")
+                    df_fluxo = preparar_dados_fluxo_caixa(df_receber_simulado, df_pagar_simulado, saldo_inicial, data_inicial, data_final)
+                    despesas_base = df_pagar_simulado
+                else:
+                    df_fluxo = preparar_dados_fluxo_caixa(df_receber, df_pagar, saldo_inicial, data_inicial, data_final)
+                    despesas_base = df_pagar
 
-            # --- RESULTADOS DA PROJEÇÃO ---
-            if df_fluxo.empty:
-                st.warning("⚠️ Não há dados suficientes para gerar a projeção de fluxo de caixa.")
-            else:
-                # --- KPIs ---
-                # CORREÇÃO: Usar o novo nome da coluna 'Saldo_Acumulado_Previsto'
-                menor_saldo_previsto = df_fluxo['Saldo_Acumulado_Previsto'].min()
-                dia_menor_saldo = df_fluxo.loc[df_fluxo['Saldo_Acumulado_Previsto'].idxmin(), 'Data'].strftime('%d/%m/%Y')
-                maior_saldo_previsto = df_fluxo['Saldo_Acumulado_Previsto'].max()
-                dias_fluxo_negativo = df_fluxo[df_fluxo['Fluxo_Líquido_Previsto'] < 0].shape[0]
+                # --- RESULTADOS DA PROJEÇÃO ---
+                if df_fluxo.empty:
+                    st.warning("⚠️ Não há dados suficientes para gerar a projeção de fluxo de caixa.")
+                else:
+                    # --- KPIs ---
+                    # CORREÇÃO: Usar o novo nome da coluna 'Saldo_Acumulado_Previsto'
+                    menor_saldo_previsto = df_fluxo['Saldo_Acumulado_Previsto'].min()
+                    dia_menor_saldo = df_fluxo.loc[df_fluxo['Saldo_Acumulado_Previsto'].idxmin(), 'Data'].strftime('%d/%m/%Y')
+                    maior_saldo_previsto = df_fluxo['Saldo_Acumulado_Previsto'].max()
+                    dias_fluxo_negativo = df_fluxo[df_fluxo['Fluxo_Líquido_Previsto'] < 0].shape[0]
 
-                kpi1, kpi2, kpi3 = st.columns(3)
-                kpi1.metric("📉 Menor Saldo Previsto", f"R$ {menor_saldo_previsto:,.2f}", help=f"Pior saldo em {dia_menor_saldo}.")
-                kpi2.metric("📈 Maior Saldo Previsto", f"R$ {maior_saldo_previsto:,.2f}")
-                kpi3.metric("🔻 Dias com Fluxo Negativo", f"{dias_fluxo_negativo} dias")
+                    kpi1, kpi2, kpi3 = st.columns(3)
+                    kpi1.metric("📉 Menor Saldo Previsto", f"R$ {menor_saldo_previsto:,.2f}", help=f"Pior saldo em {dia_menor_saldo}.")
+                    kpi2.metric("📈 Maior Saldo Previsto", f"R$ {maior_saldo_previsto:,.2f}")
+                    kpi3.metric("🔻 Dias com Fluxo Negativo", f"{dias_fluxo_negativo} dias")
 
-                st.markdown("---")
+                    st.markdown("---")
 
-                from plotly.subplots import make_subplots
-                import plotly.graph_objects as go
+                    from plotly.subplots import make_subplots
+                    import plotly.graph_objects as go
 
-                # Criar dois subgráficos lado a lado
-                fig = make_subplots(
-                    rows=1, cols=2,
-                    specs=[[{"secondary_y": True}, {"secondary_y": True}]],
-                    subplot_titles=("Previsto", "Realizado")
-                )
+                    # Criar dois subgráficos lado a lado
+                    fig = make_subplots(
+                        rows=1, cols=2,
+                        specs=[[{"secondary_y": True}, {"secondary_y": True}]],
+                        subplot_titles=("Previsto", "Realizado")
+                    )
 
-                # --- GRÁFICO 1: PREVISTO ---
-                fig.add_trace(
-                    go.Bar(
-                        x=df_fluxo['Data'],
-                        y=df_fluxo['Fluxo_Líquido_Previsto'],
-                        name='Fluxo Líquido Previsto',
-                        marker_color=['#c0392b' if v < 0 else '#2ecc71' for v in df_fluxo['Fluxo_Líquido_Previsto']]
-                    ),
-                    row=1, col=1, secondary_y=False
-                )
+                    # --- GRÁFICO 1: PREVISTO ---
+                    fig.add_trace(
+                        go.Bar(
+                            x=df_fluxo['Data'],
+                            y=df_fluxo['Fluxo_Líquido_Previsto'],
+                            name='Fluxo Líquido Previsto',
+                            marker_color=['#c0392b' if v < 0 else '#2ecc71' for v in df_fluxo['Fluxo_Líquido_Previsto']]
+                        ),
+                        row=1, col=1, secondary_y=False
+                    )
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_fluxo['Data'],
-                        y=df_fluxo['Saldo_Acumulado_Previsto'],
-                        name='Saldo Previsto',
-                        mode='lines+markers',
-                        line=dict(color='#ff4500')
-                    ),
-                    row=1, col=1, secondary_y=True
-                )
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_fluxo['Data'],
+                            y=df_fluxo['Saldo_Acumulado_Previsto'],
+                            name='Saldo Previsto',
+                            mode='lines+markers',
+                            line=dict(color='#ff4500')
+                        ),
+                        row=1, col=1, secondary_y=True
+                    )
 
-                # --- GRÁFICO 2: REALIZADO ---
-                fig.add_trace(
-                    go.Bar(
-                        x=df_fluxo['Data'],
-                        y=df_fluxo['Fluxo_Líquido_Realizado'],
-                        name='Fluxo Líquido Realizado',
-                        marker_color=['#5dade2' if v < 0 else '#3498db' for v in df_fluxo['Fluxo_Líquido_Realizado']]
-                    ),
-                    row=1, col=2, secondary_y=False
-                )
+                    # --- GRÁFICO 2: REALIZADO ---
+                    fig.add_trace(
+                        go.Bar(
+                            x=df_fluxo['Data'],
+                            y=df_fluxo['Fluxo_Líquido_Realizado'],
+                            name='Fluxo Líquido Realizado',
+                            marker_color=['#5dade2' if v < 0 else '#3498db' for v in df_fluxo['Fluxo_Líquido_Realizado']]
+                        ),
+                        row=1, col=2, secondary_y=False
+                    )
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_fluxo['Data'],
-                        y=df_fluxo['Saldo_Acumulado_Realizado'],
-                        name='Saldo Realizado',
-                        mode='lines',
-                        line=dict(color="#ff4500", dash='dot')
-                    ),
-                    row=1, col=2, secondary_y=True
-                )
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_fluxo['Data'],
+                            y=df_fluxo['Saldo_Acumulado_Realizado'],
+                            name='Saldo Realizado',
+                            mode='lines',
+                            line=dict(color="#ff4500", dash='dot')
+                        ),
+                        row=1, col=2, secondary_y=True
+                    )
 
-                # Linha horizontal em Y=0 nos dois gráficos
-                fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=1, secondary_y=True)
-                fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=2, secondary_y=True)
+                    # Linha horizontal em Y=0 nos dois gráficos
+                    fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=1, secondary_y=True)
+                    fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=2, secondary_y=True)
 
-                # Layout
-                fig.update_layout(
-                    title_text="📊 Projeção de Saldo: Previsto vs Realizado (Lado a Lado)",
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=20, r=20, t=60, b=20),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.12, xanchor="right", x=1),
-                    showlegend=False,
-                )
+                    # Layout
+                    fig.update_layout(
+                        title_text="📊 Projeção de Saldo: Previsto vs Realizado (Lado a Lado)",
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.12, xanchor="right", x=1),
+                        showlegend=False,
+                    )
 
-                # Eixos Y
-                fig.update_yaxes(title_text="Fluxo Líquido (R$)", secondary_y=False, row=1, col=1)
-                fig.update_yaxes(title_text="Saldo Acumulado (R$)", secondary_y=True, row=1, col=1)
+                    # Eixos Y
+                    fig.update_yaxes(title_text="Fluxo Líquido (R$)", secondary_y=False, row=1, col=1)
+                    fig.update_yaxes(title_text="Saldo Acumulado (R$)", secondary_y=True, row=1, col=1)
 
-                fig.update_yaxes(title_text="Fluxo Líquido (R$)", secondary_y=False, row=1, col=2)
-                fig.update_yaxes(title_text="Saldo Acumulado (R$)", secondary_y=True, row=1, col=2)
+                    fig.update_yaxes(title_text="Fluxo Líquido (R$)", secondary_y=False, row=1, col=2)
+                    fig.update_yaxes(title_text="Saldo Acumulado (R$)", secondary_y=True, row=1, col=2)
 
-                # Renderizar no Streamlit SEM BARRA DE FERRAMENTAS
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                    # Renderizar no Streamlit SEM BARRA DE FERRAMENTAS
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
-                # --- TABELA DETALHADA (com previsão vs. realizado) ---
-                with st.expander("📋 Ver detalhamento diário do fluxo de caixa"):
-                    colunas_tabela = [
-                        'Data', 'Entradas_Realizadas', 'Saídas_Realizadas', 'Fluxo_Líquido_Realizado', 'Saldo_Acumulado_Realizado',
-                        'Entradas_Previstas', 'Saídas_Previstas', 'Fluxo_Líquido_Previsto', 'Saldo_Acumulado_Previsto'
-                    ]
-                    st.dataframe(df_fluxo[colunas_tabela].style.format({
-                        'Entradas_Realizadas': "R$ {:,.2f}", 'Saídas_Realizadas': "R$ {:,.2f}", 'Fluxo_Líquido_Realizado': "R$ {:,.2f}", 'Saldo_Acumulado_Realizado': "R$ {:,.2f}",
-                        'Entradas_Previstas': "R$ {:,.2f}", 'Saídas_Previstas': "R$ {:,.2f}", 'Fluxo_Líquido_Previsto': "R$ {:,.2f}", 'Saldo_Acumulado_Previsto': "R$ {:,.2f}",
-                        'Data': '{:%d/%m/%Y}'
-                    }, na_rep="-"), use_container_width=True)
+                    # --- TABELA DETALHADA (com previsão vs. realizado) ---
+                    with st.expander("📋 Ver detalhamento diário do fluxo de caixa"):
+                        colunas_tabela = [
+                            'Data', 'Entradas_Realizadas', 'Saídas_Realizadas', 'Fluxo_Líquido_Realizado', 'Saldo_Acumulado_Realizado',
+                            'Entradas_Previstas', 'Saídas_Previstas', 'Fluxo_Líquido_Previsto', 'Saldo_Acumulado_Previsto'
+                        ]
+                        st.dataframe(df_fluxo[colunas_tabela].style.format({
+                            'Entradas_Realizadas': "R$ {:,.2f}", 'Saídas_Realizadas': "R$ {:,.2f}", 'Fluxo_Líquido_Realizado': "R$ {:,.2f}", 'Saldo_Acumulado_Realizado': "R$ {:,.2f}",
+                            'Entradas_Previstas': "R$ {:,.2f}", 'Saídas_Previstas': "R$ {:,.2f}", 'Fluxo_Líquido_Previsto': "R$ {:,.2f}", 'Saldo_Acumulado_Previsto': "R$ {:,.2f}",
+                            'Data': '{:%d/%m/%Y}'
+                        }, na_rep="-"), use_container_width=True)
 
-                # --- ANÁLISES ADICIONAIS ---
-                st.markdown("---")
-                st.subheader("🔎 Análises Adicionais")
-                col1, col2 = st.columns(2)
+                    # --- ANÁLISES ADICIONAIS ---
+                    st.markdown("---")
+                    st.subheader("🔎 Análises Adicionais")
+                    col1, col2 = st.columns(2)
 
-                with col1:
-                                        st.markdown("##### ⛽ Maiores Despesas no Período (Realizado)")
-                                        
-                                        # --- INÍCIO DA CORREÇÃO ---
-                                        # 1. Aplicar o filtro de data à base de despesas (original ou simulada)
-                                        # Garante que a análise respeite o período selecionado na sidebar.
-                                        despesas_no_periodo = despesas_base[
-                                            (despesas_base['Data Vencimento'].dt.date >= data_inicial) &
-                                            (despesas_base['Data Vencimento'].dt.date <= data_final)
-                                        ]
-
-                                        # 2. Filtrar apenas as despesas "EM ABERTO" do período
-                                        despesas_aberto = despesas_no_periodo[despesas_no_periodo['Status'] == 'PAGO'].copy()
-                                        # --- FIM DA CORREÇÃO ---
-
-                                        if not despesas_aberto.empty:
-                                            top_10_despesas = despesas_aberto.groupby('Fornecedor')['Valor'].sum().nlargest(10).sort_values(ascending=True).reset_index()
+                    with col1:
+                                            st.markdown("##### ⛽ Maiores Despesas no Período (Realizado)")
                                             
-                                            fig_despesas = px.bar(
-                                                top_10_despesas, y='Fornecedor', x='Valor', orientation='h',
-                                                text_auto=True, height=400
-                                            )
-                                            fig_despesas.update_traces(marker_color='#ff4500', texttemplate='R$ %{x:,.2f}')
-                                            fig_despesas.update_layout(xaxis_title="Valor a Pagar (R$)", yaxis_title=None, margin=dict(l=10, r=10, t=30, b=10))
-                                            st.plotly_chart(fig_despesas, use_container_width=True)
-                                        else:
-                                            st.info("Não há despesas em aberto para analisar no período selecionado.")
-                with col2:
-                    st.markdown("##### ⚖️ Receitas vs. Despesas (Realizado)")
-                    periodo_agregacao = st.radio(
-                        "Visualizar por:", ["Diário", "Semanal", "Mensal"],
-                        horizontal=True, key='agregacao_receita_despesa'
-                    )
+                                            # --- INÍCIO DA CORREÇÃO ---
+                                            # 1. Aplicar o filtro de data à base de despesas (original ou simulada)
+                                            # Garante que a análise respeite o período selecionado na sidebar.
+                                            despesas_no_periodo = despesas_base[
+                                                (despesas_base['Data Vencimento'].dt.date >= data_inicial) &
+                                                (despesas_base['Data Vencimento'].dt.date <= data_final)
+                                            ]
 
-                    # CORREÇÃO: Usar as novas colunas 'Entradas_Previstas' e 'Saídas_Previstas'
-                    df_fluxo_agregado = df_fluxo.set_index('Data')
-                    if periodo_agregacao == "Semanal":
-                        df_plot = df_fluxo_agregado[['Entradas_Realizadas', 'Saídas_Realizadas']].resample('W-MON').sum().reset_index()
-                        df_plot['Data'] = df_plot['Data'].dt.strftime('%d/%m (Sem)')
-                    elif periodo_agregacao == "Mensal":
-                        df_plot = df_fluxo_agregado[['Entradas_Realizadas', 'Saídas_Realizadas']].resample('M').sum().reset_index()
-                        df_plot['Data'] = df_plot['Data'].dt.strftime('%b/%Y')
-                    else: # Diário
-                        df_plot = df_fluxo[['Data', 'Entradas_Realizadas', 'Saídas_Realizadas']]
-                        df_plot['Data'] = df_plot['Data'].dt.strftime('%d/%m')
+                                            # 2. Filtrar apenas as despesas "EM ABERTO" do período
+                                            despesas_aberto = despesas_no_periodo[despesas_no_periodo['Status'] == 'PAGO'].copy()
+                                            # --- FIM DA CORREÇÃO ---
 
-                    fig_entradas_saidas = px.bar(
-                        df_plot, x='Data', y=['Entradas_Realizadas', 'Saídas_Realizadas'],
-                        barmode='group', height=400,
-                        color_discrete_map={'Entradas_Realizadas': '#28a745', 'Saídas_Realizadas': '#dc3545'},
-                        labels={'value': 'Valor (R$)', 'variable': 'Legenda'}
-                    )
-                    fig_entradas_saidas.update_layout(xaxis_title=None, yaxis_title="Valor (R$)", margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig_entradas_saidas, use_container_width=True)
+                                            if not despesas_aberto.empty:
+                                                top_10_despesas = despesas_aberto.groupby('Fornecedor')['Valor'].sum().nlargest(10).sort_values(ascending=True).reset_index()
+                                                
+                                                fig_despesas = px.bar(
+                                                    top_10_despesas, y='Fornecedor', x='Valor', orientation='h',
+                                                    text_auto=True, height=400
+                                                )
+                                                fig_despesas.update_traces(marker_color='#ff4500', texttemplate='R$ %{x:,.2f}')
+                                                fig_despesas.update_layout(xaxis_title="Valor a Pagar (R$)", yaxis_title=None, margin=dict(l=10, r=10, t=30, b=10))
+                                                st.plotly_chart(fig_despesas, use_container_width=True)
+                                            else:
+                                                st.info("Não há despesas em aberto para analisar no período selecionado.")
+                    with col2:
+                        st.markdown("##### ⚖️ Receitas vs. Despesas (Realizado)")
+                        periodo_agregacao = st.radio(
+                            "Visualizar por:", ["Diário", "Semanal", "Mensal"],
+                            horizontal=True, key='agregacao_receita_despesa'
+                        )
+
+                        # CORREÇÃO: Usar as novas colunas 'Entradas_Previstas' e 'Saídas_Previstas'
+                        df_fluxo_agregado = df_fluxo.set_index('Data')
+                        if periodo_agregacao == "Semanal":
+                            df_plot = df_fluxo_agregado[['Entradas_Realizadas', 'Saídas_Realizadas']].resample('W-MON').sum().reset_index()
+                            df_plot['Data'] = df_plot['Data'].dt.strftime('%d/%m (Sem)')
+                        elif periodo_agregacao == "Mensal":
+                            df_plot = df_fluxo_agregado[['Entradas_Realizadas', 'Saídas_Realizadas']].resample('M').sum().reset_index()
+                            df_plot['Data'] = df_plot['Data'].dt.strftime('%b/%Y')
+                        else: # Diário
+                            df_plot = df_fluxo[['Data', 'Entradas_Realizadas', 'Saídas_Realizadas']]
+                            df_plot['Data'] = df_plot['Data'].dt.strftime('%d/%m')
+
+                        fig_entradas_saidas = px.bar(
+                            df_plot, x='Data', y=['Entradas_Realizadas', 'Saídas_Realizadas'],
+                            barmode='group', height=400,
+                            color_discrete_map={'Entradas_Realizadas': '#28a745', 'Saídas_Realizadas': '#dc3545'},
+                            labels={'value': 'Valor (R$)', 'variable': 'Legenda'}
+                        )
+                        fig_entradas_saidas.update_layout(xaxis_title=None, yaxis_title="Valor (R$)", margin=dict(l=10, r=10, t=30, b=10))
+                        st.plotly_chart(fig_entradas_saidas, use_container_width=True)
         
         with tab4:
             import pandas as pd
