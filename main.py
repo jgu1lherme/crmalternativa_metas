@@ -1342,7 +1342,7 @@ else:
     # -------------------------------------------------------------------------------- 
     elif pagina_selecionada == "Painel Financeiro":
 
-        caminho_financeiro = "/resources/GERAL.xlsx"
+        caminho_financeiro = "resources/GERAL.xlsx"
         df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
 
         if df_receber is not None and df_pagar is not None:
