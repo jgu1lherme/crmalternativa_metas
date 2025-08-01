@@ -27,3 +27,4 @@ requests
 watchdog
 tqdm
 typing_extensions
+Prophet
