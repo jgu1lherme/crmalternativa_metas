@@ -1635,99 +1635,99 @@ else:
                         fig_entradas_saidas.update_layout(xaxis_title=None, yaxis_title="Valor (R$)", margin=dict(l=10, r=10, t=30, b=10))
                         st.plotly_chart(fig_entradas_saidas, use_container_width=True)
         
-        with tab4:
-            import pandas as pd
-            from datetime import datetime
-            import plotly.express as px
-            import streamlit as st
+            with tab4:
+                import pandas as pd
+                from datetime import datetime
+                import plotly.express as px
+                import streamlit as st
 
-            # st.subheader("📈 Demonstrativo de resultado no exercício")
+                # st.subheader("📈 Demonstrativo de resultado no exercício")
 
-            tipo_analise = st.radio(
-                "Selecione o critério de análise:",
-                ('Regime Previsto', 'Regime Realizado'),
-                horizontal=True,
-                help="""
-                - **Regime Previsto:** Mostra a lucratividade com base nas datas de venda e vencimento (visão econômica).
-                - **Regime Realizado:** Mostra o resultado financeiro com base no que foi efetivamente pago e recebido (visão de caixa).
-                """
-            )
+                tipo_analise = st.radio(
+                    "Selecione o critério de análise:",
+                    ('Regime Previsto', 'Regime Realizado'),
+                    horizontal=True,
+                    help="""
+                    - **Regime Previsto:** Mostra a lucratividade com base nas datas de venda e vencimento (visão econômica).
+                    - **Regime Realizado:** Mostra o resultado financeiro com base no que foi efetivamente pago e recebido (visão de caixa).
+                    """
+                )
 
-            caminho_financeiro = "resources/GERAL.xlsx"
-            df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
+                caminho_financeiro = "resources/GERAL.xlsx"
+                df_receber, df_pagar = carregar_dados_financeiros(caminho_financeiro)
 
-            df_resultados = pd.DataFrame()
+                df_resultados = pd.DataFrame()
 
-            # --- REGIME DE COMPETÊNCIA ---
-            if tipo_analise == 'Regime Previsto':
-                st.markdown("Compare suas **vendas faturadas** com suas **despesas por vencimento**.")
-                if df_filtrado is not None and not df_filtrado.empty and df_pagar is not None:
-                    vendas_mensais = df_filtrado.set_index('DAT_CAD').resample('M')['PED_TOTAL'].sum().rename("Receita (Competência)")
-                    despesas_mensais = df_pagar.set_index('Data Vencimento').resample('M')['Valor'].sum().rename("Despesa (Competência)")
+                # --- REGIME DE COMPETÊNCIA ---
+                if tipo_analise == 'Regime Previsto':
+                    st.markdown("Compare suas **vendas faturadas** com suas **despesas por vencimento**.")
+                    if df_filtrado is not None and not df_filtrado.empty and df_pagar is not None:
+                        vendas_mensais = df_filtrado.set_index('DAT_CAD').resample('M')['PED_TOTAL'].sum().rename("Receita (Competência)")
+                        despesas_mensais = df_pagar.set_index('Data Vencimento').resample('M')['Valor'].sum().rename("Despesa (Competência)")
 
-                    df_resultados = pd.concat([vendas_mensais, despesas_mensais], axis=1).fillna(0)
-                    df_resultados['Resultado'] = df_resultados['Receita (Competência)'] - df_resultados['Despesa (Competência)']
-                    df_resultados.rename(columns={
-                        'Receita (Competência)': 'Receitas',
-                        'Despesa (Competência)': 'Despesas'
-                    }, inplace=True)
+                        df_resultados = pd.concat([vendas_mensais, despesas_mensais], axis=1).fillna(0)
+                        df_resultados['Resultado'] = df_resultados['Receita (Competência)'] - df_resultados['Despesa (Competência)']
+                        df_resultados.rename(columns={
+                            'Receita (Competência)': 'Receitas',
+                            'Despesa (Competência)': 'Despesas'
+                        }, inplace=True)
 
-            # --- REGIME DE CAIXA ---
-            elif tipo_analise == 'Regime Realizado':
-                st.markdown("Compare suas **receitas efetivamente recebidas** com suas **despesas efetivamente pagas**.")
-                if df_receber is not None and df_pagar is not None:
-                    df_receber['Data_Baixa'] = pd.to_datetime(df_receber['Data_Baixa'], errors='coerce')
-                    df_pagar['Data_Baixa'] = pd.to_datetime(df_pagar['Data_Baixa'], errors='coerce')
+                # --- REGIME DE CAIXA ---
+                elif tipo_analise == 'Regime Realizado':
+                    st.markdown("Compare suas **receitas efetivamente recebidas** com suas **despesas efetivamente pagas**.")
+                    if df_receber is not None and df_pagar is not None:
+                        df_receber['Data_Baixa'] = pd.to_datetime(df_receber['Data_Baixa'], errors='coerce')
+                        df_pagar['Data_Baixa'] = pd.to_datetime(df_pagar['Data_Baixa'], errors='coerce')
 
-                    df_recebimentos = df_receber[df_receber['Status'] == 'PAGO'].dropna(subset=['Data_Baixa'])
-                    df_pagamentos = df_pagar[df_pagar['Status'] == 'PAGO'].dropna(subset=['Data_Baixa'])
+                        df_recebimentos = df_receber[df_receber['Status'] == 'PAGO'].dropna(subset=['Data_Baixa'])
+                        df_pagamentos = df_pagar[df_pagar['Status'] == 'PAGO'].dropna(subset=['Data_Baixa'])
+
+                        if 'start_date' in st.session_state and 'end_date' in st.session_state:
+                            start_date = pd.to_datetime(st.session_state.start_date)
+                            end_date = pd.to_datetime(st.session_state.end_date)
+                            df_recebimentos = df_recebimentos[df_recebimentos['Data_Baixa'].between(start_date, end_date)]
+                            df_pagamentos = df_pagamentos[df_pagamentos['Data_Baixa'].between(start_date, end_date)]
+                        else:
+                            ano_atual = datetime.now().year
+                            df_recebimentos = df_recebimentos[df_recebimentos['Data_Baixa'].dt.year == ano_atual]
+                            df_pagamentos = df_pagamentos[df_pagamentos['Data_Baixa'].dt.year == ano_atual]
+
+                        receitas_realizadas = df_recebimentos.set_index('Data_Baixa').resample('M')['Valor'].sum().rename("Receitas Realizadas (Caixa)")
+                        despesas_realizadas = df_pagamentos.set_index('Data_Baixa').resample('M')['VALOR_PAGO'].sum().rename("Despesas Pagas (Caixa)")
+
+                        df_resultados = pd.concat([receitas_realizadas, despesas_realizadas], axis=1).fillna(0)
+                        df_resultados['Resultado'] = df_resultados['Receitas Realizadas (Caixa)'] - df_resultados['Despesas Pagas (Caixa)']
+                        df_resultados.rename(columns={
+                            'Receitas Realizadas (Caixa)': 'Receitas',
+                            'Despesas Pagas (Caixa)': 'Despesas'
+                        }, inplace=True)
+
+                # --- EXIBIÇÃO FINAL ---
+                if not df_resultados.empty:
+                    df_resultados.index = pd.to_datetime(df_resultados.index)
 
                     if 'start_date' in st.session_state and 'end_date' in st.session_state:
-                        start_date = pd.to_datetime(st.session_state.start_date)
-                        end_date = pd.to_datetime(st.session_state.end_date)
-                        df_recebimentos = df_recebimentos[df_recebimentos['Data_Baixa'].between(start_date, end_date)]
-                        df_pagamentos = df_pagamentos[df_pagamentos['Data_Baixa'].between(start_date, end_date)]
-                    else:
-                        ano_atual = datetime.now().year
-                        df_recebimentos = df_recebimentos[df_recebimentos['Data_Baixa'].dt.year == ano_atual]
-                        df_pagamentos = df_pagamentos[df_pagamentos['Data_Baixa'].dt.year == ano_atual]
+                        start_date_resample = pd.to_datetime(st.session_state.start_date)
+                        end_date_resample = pd.to_datetime(st.session_state.end_date)
+                        df_resultados = df_resultados[(df_resultados.index >= start_date_resample) & (df_resultados.index <= end_date_resample)]
 
-                    receitas_realizadas = df_recebimentos.set_index('Data_Baixa').resample('M')['Valor'].sum().rename("Receitas Realizadas (Caixa)")
-                    despesas_realizadas = df_pagamentos.set_index('Data_Baixa').resample('M')['VALOR_PAGO'].sum().rename("Despesas Pagas (Caixa)")
+                    df_resultados.index = df_resultados.index.strftime('%b/%Y')
 
-                    df_resultados = pd.concat([receitas_realizadas, despesas_realizadas], axis=1).fillna(0)
-                    df_resultados['Resultado'] = df_resultados['Receitas Realizadas (Caixa)'] - df_resultados['Despesas Pagas (Caixa)']
-                    df_resultados.rename(columns={
-                        'Receitas Realizadas (Caixa)': 'Receitas',
-                        'Despesas Pagas (Caixa)': 'Despesas'
-                    }, inplace=True)
+                    resultado_total = df_resultados['Resultado'].sum()
+                    cor_delta = "normal" if resultado_total >= 0 else "inverse"
+                    st.metric("Resultado Final no Período", f"R$ {resultado_total:,.2f}", delta_color=cor_delta)
 
-            # --- EXIBIÇÃO FINAL ---
-            if not df_resultados.empty:
-                df_resultados.index = pd.to_datetime(df_resultados.index)
+                    fig_dre = px.bar(
+                        df_resultados,
+                        y=['Receitas', 'Despesas', 'Resultado'],
+                        barmode='group',
+                        title=f"Análise Mensal - {tipo_analise}",
+                        labels={'value': 'Valor (R$)', 'variable': 'Métrica'},
+                        color_discrete_map={'Receitas': '#28a745', 'Despesas': '#dc3545', 'Resultado': '#007bff'}
+                    )
+                    st.plotly_chart(fig_dre, use_container_width=True)
 
-                if 'start_date' in st.session_state and 'end_date' in st.session_state:
-                    start_date_resample = pd.to_datetime(st.session_state.start_date)
-                    end_date_resample = pd.to_datetime(st.session_state.end_date)
-                    df_resultados = df_resultados[(df_resultados.index >= start_date_resample) & (df_resultados.index <= end_date_resample)]
-
-                df_resultados.index = df_resultados.index.strftime('%b/%Y')
-
-                resultado_total = df_resultados['Resultado'].sum()
-                cor_delta = "normal" if resultado_total >= 0 else "inverse"
-                st.metric("Resultado Final no Período", f"R$ {resultado_total:,.2f}", delta_color=cor_delta)
-
-                fig_dre = px.bar(
-                    df_resultados,
-                    y=['Receitas', 'Despesas', 'Resultado'],
-                    barmode='group',
-                    title=f"Análise Mensal - {tipo_analise}",
-                    labels={'value': 'Valor (R$)', 'variable': 'Métrica'},
-                    color_discrete_map={'Receitas': '#28a745', 'Despesas': '#dc3545', 'Resultado': '#007bff'}
-                )
-                st.plotly_chart(fig_dre, use_container_width=True)
-
-                with st.expander("Ver tabela de resultados detalhada"):
-                    st.dataframe(df_resultados.style.format("R$ {:,.2f}"), use_container_width=True)
-            else:
-                st.warning("Não há dados suficientes no período selecionado para gerar esta análise.")
+                    with st.expander("Ver tabela de resultados detalhada"):
+                        st.dataframe(df_resultados.style.format("R$ {:,.2f}"), use_container_width=True)
+                else:
+                    st.warning("Não há dados suficientes no período selecionado para gerar esta análise.")
